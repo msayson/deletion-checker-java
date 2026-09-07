@@ -155,18 +155,31 @@ buckets ≈ K; unsigned byte-wise comparison with supplementary chars; non-posit
 `K` rejected; accessors copy. (All-identical ids is a generator/dedup concern, not
 reachable here post-dedup.)
 
-### [ ] B4 — Binary format: header + checksum helper
+### [x] B4 — Binary format: header + checksum helper
 
-- `PackedFileFormat` — magic, `FORMAT_VERSION = 1`, little-endian + field-offset
-  constants.
-- `Header` record — `formatVersion`, `entityType` (≤64 ASCII bytes),
-  `identifierCount`, `bucketSize`, `bucketCount`, `checksum` (CRC32C, 4 bytes) —
-  explicit little-endian `writeTo` / `readFrom`.
+- `PackedFileFormat` (package-private) — magic (`0x89 'D' 'C' 'S'`),
+  `FORMAT_VERSION = 1`, little-endian constant, and the byte offset of every fixed
+  header field. Fixed 92-byte header: magic(4) · formatVersion(4) ·
+  entityTypeLength(4) · entityType(64, ASCII zero-padded) · identifierCount(4) ·
+  bucketSize(4) · bucketCount(4) · checksum(4).
+- `Header` record (package-private) — `formatVersion`, `entityType` (1..64 ASCII
+  bytes), `identifierCount`, `bucketSize`, `bucketCount`, `checksum` (CRC32C,
+  unsigned in a `long`). Absolute-indexed little-endian `writeTo` / `readFrom`;
+  neither touches the buffer's position/limit.
+- `CorruptDatasetException` / `UnsupportedFormatVersionException` (public,
+  unchecked) — the §10 error taxonomy split; the latter carries `found` /
+  `supported`.
 - `Checksums.crc32cWithFieldZeroed(buffer, fieldOffset, fieldLen)` — the §5.5
-  three-segment stream (before / four zero bytes / after), no modified copy.
+  three-segment stream (before / `fieldLen` zero bytes / after), no modified copy;
+  treats the buffer's `[0, limit)` as the file.
 
-**Tests:** round-trip; byte-exact endianness; `entityType` `>64` bytes rejected;
-bad magic; unrecognized `formatVersion`; field-zeroed CRC32C == manual reference.
+**Tests:** round-trip incl. exactly-64 entityType and unsigned checksum;
+byte-exact little-endian layout; `writeTo` leaves position untouched; constructor
+rejects null / empty / >64 / non-ASCII entityType; `readFrom` maps bad magic →
+corrupt, unknown `formatVersion` → version mismatch (with `found`/`supported`),
+out-of-range / non-ASCII entityType field → corrupt. `Checksums`: field-zeroed
+CRC32C == hashing a modified copy (field at start / middle / end); honours
+`limit` as end-of-file; buffer position/limit unchanged.
 
 ### [ ] B5 — PackedFileWriter
 

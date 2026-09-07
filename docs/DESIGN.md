@@ -96,10 +96,11 @@ The three version fields separate previously‑conflated concerns. `formatVersio
 
 ### **5.2 Per‑Entity‑Type File Layout**
 ```
-[Header]
-  magic bytes
+[Header]  (fixed size: 92 bytes)
+  magic bytes         (4 bytes: 0x89 'D' 'C' 'S' — the high‑bit byte catches 7‑bit‑stripping transfers)
   formatVersion       (this file's own binary layout version — independent of the manifest's formatVersion and of datasetVersion/generatorVersion, which live only in the manifest, §5.1)
-  entityType (ASCII, max 64 bytes — must match the manifest entry)
+  entityTypeLength    (1..64)
+  entityType          (fixed 64‑byte field, ASCII, zero‑padded — the first entityTypeLength bytes are significant; must match the manifest entry)
   identifierCount     (count of unique identifiers, post‑deduplication — §8.2)
   bucketSize          (K: target entries per bucket)
   bucketCount         (= ceil(identifierCount / bucketSize); 1 below the small‑dataset threshold)

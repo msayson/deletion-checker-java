@@ -40,6 +40,7 @@ reviewable PR that builds green, holds ≥90% line **and** branch coverage
 | D10 | Perf tests `@Tag("perf")` + `perfTest` task, manual for now | CI gating is a tracked follow-up |
 | D11 | `data/` kept, contents gitignored | Generated `.dat` files reach ~400 MB — release artifacts, not source |
 | D12 | `lib` jar sets `Automatic-Module-Name: com.marksayson.deletionchecker` | Table stakes for a widely-consumed library |
+| D13 | Per-file checksum is JDK `java.util.zip.CRC32C`, not hand-rolled xxHash64 | Zero hand-rolled hash code to own; hardware-accelerated; purpose-built for corruption/truncation detection. 32-bit is enough for a non-adversarial threat model (DESIGN §5.5). Manifest keeps SHA-256. Header `checksum` field is 4 bytes |
 
 ---
 
@@ -65,9 +66,9 @@ lib/                             runtime checker — ZERO runtime deps
       ManifestWriter.java         canonical JSON + SHA-256                (generator-only)
       DatasetManifest.java        parse + verify + entity-type lookup
     checksum/
-      XxHash64.java               streaming + one-shot
+      Crc32c.java                 one-shot CRC32C over byte[] / ByteBuffer (wraps java.util.zip.CRC32C)
       Sha256.java                 MessageDigest wrapper
-      Checksums.java              hash-with-field-zeroed helper (DESIGN §5.5)
+      Checksums.java              CRC32C-with-field-zeroed helper (DESIGN §5.5)
 
 dataset-generator/               build-time tool — dependsOn(lib), may take deps (picocli)
   src/main/java/com/marksayson/deletionchecker/generator/
@@ -117,17 +118,19 @@ add it only when a caller needs it.
 null; empty; unpaired high / low surrogate. Comparator: UTF-8 vs `String.compareTo`
 divergence on supplementary chars; prefix vs longer; equal; bytes ≥ 0x80.
 
-### [ ] B2 — Checksums
+### [x] B2 — Checksums
 
-- `XxHash64` — hand-rolled: streaming `update(ByteBuffer)` + `digest()` (buffers
-  the sub-32-byte stripe tail across calls), plus one-shot.
-- `Sha256` — `MessageDigest` wrapper.
+- `Crc32c` — one-shot `of(byte[])` / `of(ByteBuffer)` over `java.util.zip.CRC32C`;
+  buffer overload leaves position/limit untouched. Also the single place that
+  documents CRC32C as the per-file algorithm.
+- `Sha256` — `MessageDigest` wrapper, `of(byte[])`, for the manifest.
 
-**Tests:** xxHash64 published vectors (empty, `"abc"`, `>32` bytes for the 4-lane
-loop, non-zero seed); streaming == one-shot; chunk-boundary invariance. SHA-256
-known vector.
-**Risk:** top correctness risk — hence its own batch, tested against published
-vectors.
+**Tests:** CRC32C against the standard check value (`"123456789"` → `0xE3069283`)
+and empty → `0`; `of(ByteBuffer)` == `of(byte[])`; partial buffer; position/limit
+restored. SHA-256 against the FIPS 180-2 `"abc"` and empty vectors.
+**Risk:** was the top correctness risk when the hash was hand-rolled; now
+JDK-backed, so the tests validate our usage (unsigned value, buffer handling), not
+the algorithm.
 
 ### [ ] B3 — PrefixIndex
 
@@ -150,21 +153,21 @@ comparison with supplementary chars.
 - `PackedFileFormat` — magic, `FORMAT_VERSION = 1`, little-endian + field-offset
   constants.
 - `Header` record — `formatVersion`, `entityType` (≤64 ASCII bytes),
-  `identifierCount`, `bucketSize`, `bucketCount`, `checksum` — explicit
-  little-endian `writeTo` / `readFrom`.
-- `Checksums.hashWithFieldZeroed(buffer, fieldOffset, fieldLen)` — the §5.5
-  three-segment stream, no modified copy.
+  `identifierCount`, `bucketSize`, `bucketCount`, `checksum` (CRC32C, 4 bytes) —
+  explicit little-endian `writeTo` / `readFrom`.
+- `Checksums.crc32cWithFieldZeroed(buffer, fieldOffset, fieldLen)` — the §5.5
+  three-segment stream (before / four zero bytes / after), no modified copy.
 
 **Tests:** round-trip; byte-exact endianness; `entityType` `>64` bytes rejected;
-bad magic; unrecognized `formatVersion`; zeroed-field hash == manual reference.
+bad magic; unrecognized `formatVersion`; field-zeroed CRC32C == manual reference.
 
 ### [ ] B5 — PackedFileWriter
 
 - Input: `entityType` + an **already sorted and deduped** `List<byte[]>` + `K`
   (precondition asserted).
 - Emit, in order: header, prefix index (B3 struct), identifier offset table
-  (`N + 1` LE offsets), identifier data. Compute xxHash64 with the checksum field
-  zeroed, patch it into the header.
+  (`N + 1` LE offsets), identifier data. Compute the CRC32C with the checksum
+  field zeroed, patch it into the header.
 - `OffsetTableBuilder` lands here.
 
 **Tests:** write → parse back, assert every section; `n` = 0, 1, multi-bucket;

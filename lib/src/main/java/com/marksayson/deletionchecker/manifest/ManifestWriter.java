@@ -1,9 +1,5 @@
 package com.marksayson.deletionchecker.manifest;
 
-import com.marksayson.deletionchecker.checksum.Sha256;
-import java.nio.charset.StandardCharsets;
-import java.util.HexFormat;
-
 /**
  * Renders a manifest to the JSON written to disk: the canonical form (DESIGN: keys ascending, no
  * insignificant whitespace) with a trailing {@code manifestChecksum} field holding the SHA-256 of
@@ -24,8 +20,7 @@ public final class ManifestWriter {
      */
     public static String write(final DatasetManifest manifest) {
         final String canonical = ManifestCanonicalizer.canonicalize(manifest);
-        final String checksum = "sha256:" + HexFormat.of().formatHex(
-                Sha256.of(canonical.getBytes(StandardCharsets.UTF_8)));
+        final String checksum = ManifestCanonicalizer.checksum(canonical);
         // manifestChecksum sorts last, so it goes just before the closing brace.
         return canonical.substring(0, canonical.length() - 1)
                 + ",\"manifestChecksum\":\"" + checksum + "\"}";

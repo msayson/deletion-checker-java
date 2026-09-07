@@ -15,8 +15,18 @@ import java.util.Map;
  */
 final class ManifestJson {
 
+    /**
+     * Maximum object/array nesting. The manifest schema nests exactly three deep (root object →
+     * entityTypes array → entry object; entry fields are all scalar), so anything past this is
+     * malformed. The strict schema check in {@code DatasetManifest.parse} is the real structural
+     * gate; this bound just stops a corrupt or truncated file from driving {@link #readValue} into a
+     * {@link StackOverflowError} before that check runs. One level of slack over the schema depth.
+     */
+    private static final int MAX_DEPTH = 4;
+
     private final String text;
     private int position;
+    private int depth;
 
     private ManifestJson(final String text) {
         this.text = text;
@@ -39,11 +49,14 @@ final class ManifestJson {
             throw new InvalidManifestException("unexpected end of manifest");
         }
         final char c = text.charAt(position);
-        if (c == '{') {
-            return readObject();
-        }
-        if (c == '[') {
-            return readArray();
+        if (c == '{' || c == '[') {
+            if (++depth > MAX_DEPTH) {
+                throw new InvalidManifestException(
+                        "manifest nesting exceeds the " + MAX_DEPTH + "-level limit");
+            }
+            final Object container = c == '{' ? readObject() : readArray();
+            depth--;
+            return container;
         }
         if (c == '"') {
             return readString();

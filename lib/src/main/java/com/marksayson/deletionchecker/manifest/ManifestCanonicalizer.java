@@ -1,5 +1,8 @@
 package com.marksayson.deletionchecker.manifest;
 
+import com.marksayson.deletionchecker.checksum.Sha256;
+import java.nio.charset.StandardCharsets;
+import java.util.HexFormat;
 import java.util.List;
 
 /**
@@ -14,7 +17,24 @@ import java.util.List;
  */
 public final class ManifestCanonicalizer {
 
+    /** Algorithm prefix on a {@code manifestChecksum} value: {@value}. */
+    public static final String CHECKSUM_PREFIX = "sha256:";
+
     private ManifestCanonicalizer() {
+    }
+
+    /**
+     * Returns the {@code manifestChecksum} value for the manifest whose checksum-free canonical form
+     * is {@code canonicalJson}: {@link #CHECKSUM_PREFIX} followed by the lowercase-hex SHA-256 of
+     * that form's UTF-8 bytes. The writer stores this; verification recomputes it the same way, so
+     * both sides always agree.
+     *
+     * @param canonicalJson a manifest's canonical form, as returned by {@link #canonicalize}
+     * @return the {@code manifestChecksum} value
+     */
+    public static String checksum(final String canonicalJson) {
+        return CHECKSUM_PREFIX + HexFormat.of().formatHex(
+                Sha256.of(canonicalJson.getBytes(StandardCharsets.UTF_8)));
     }
 
     /**

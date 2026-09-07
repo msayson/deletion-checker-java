@@ -1,13 +1,13 @@
 package com.marksayson.deletionchecker.manifest;
 
-import com.marksayson.deletionchecker.checksum.Sha256;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +36,9 @@ public record DatasetManifest(
             "datasetVersion", "entityTypes", "formatVersion", "generatorVersion", "manifestChecksum");
     private static final Set<String> ENTRY_KEYS =
             Set.of("checksum", "entityType", "fileName", "identifierCount");
+
+    private static final int SHA256_HEX_LENGTH = 64;
+    private static final int MAX_GENERATOR_VERSION_LENGTH = 64;
 
     /** Makes the entity-type list immutable. */
     public DatasetManifest {
@@ -68,22 +71,36 @@ public record DatasetManifest(
             throw new UnsupportedManifestVersionException(formatVersion, SUPPORTED_FORMAT_VERSION);
         }
 
-        final String datasetVersion = stringValue(map, "datasetVersion");
-        final String generatorVersion = stringValue(map, "generatorVersion");
+        final String datasetVersion = timestampValue(map, "datasetVersion");
+        final String generatorVersion = generatorVersionValue(map);
         final List<EntityTypeEntry> entityTypes = entityTypeEntries(map);
         final String manifestChecksum = stringValue(map, "manifestChecksum");
         requireOnlyKeys(map, MANIFEST_KEYS, "manifest");
 
         final DatasetManifest manifest =
                 new DatasetManifest(formatVersion, datasetVersion, generatorVersion, entityTypes);
-        final String expected = "sha256:" + HexFormat.of().formatHex(Sha256.of(
-                ManifestCanonicalizer.canonicalize(manifest).getBytes(StandardCharsets.UTF_8)));
-        if (!expected.equals(manifestChecksum)) {
-            throw new InvalidManifestException(
-                    "manifestChecksum mismatch: computed " + expected + ", manifest has "
-                            + manifestChecksum);
-        }
+        verifyChecksum(manifest, manifestChecksum);
         return manifest;
+    }
+
+    private static void verifyChecksum(final DatasetManifest manifest, final String actual) {
+        if (!isSha256Reference(actual)) {
+            throw new InvalidManifestException(
+                    "malformed manifestChecksum '" + actual + "'; expected \""
+                            + ManifestCanonicalizer.CHECKSUM_PREFIX + "\" followed by "
+                            + SHA256_HEX_LENGTH + " lowercase hex digits");
+        }
+        final String expected = ManifestCanonicalizer.checksum(
+                ManifestCanonicalizer.canonicalize(manifest));
+        if (!expected.equals(actual)) {
+            throw new InvalidManifestException(
+                    "manifestChecksum mismatch: computed " + expected + ", manifest has " + actual);
+        }
+    }
+
+    private static boolean isSha256Reference(final String value) {
+        return ChecksumString.hasShape(
+                value, ManifestCanonicalizer.CHECKSUM_PREFIX, SHA256_HEX_LENGTH);
     }
 
     /**
@@ -116,16 +133,45 @@ public record DatasetManifest(
             final long identifierCount = longValue(entry, "identifierCount");
             final String checksum = stringValue(entry, "checksum");
             requireOnlyKeys(entry, ENTRY_KEYS, "entityTypes entry");
-            if (identifierCount < 0) {
-                throw new InvalidManifestException(
-                        "'identifierCount' must not be negative: " + identifierCount);
+            final EntityTypeEntry parsed;
+            try {
+                parsed = new EntityTypeEntry(entityType, fileName, identifierCount, checksum);
+            } catch (final IllegalArgumentException e) {
+                throw new InvalidManifestException("invalid entityTypes entry: " + e.getMessage());
             }
             if (!seen.add(entityType)) {
                 throw new InvalidManifestException("duplicate entityType '" + entityType + "'");
             }
-            entries.add(new EntityTypeEntry(entityType, fileName, identifierCount, checksum));
+            entries.add(parsed);
         }
         return entries;
+    }
+
+    private static String timestampValue(final Map<?, ?> map, final String key) {
+        final String value = stringValue(map, key);
+        try {
+            Instant.parse(value);
+        } catch (final DateTimeParseException e) {
+            throw new InvalidManifestException(
+                    "'" + key + "' must be an ISO-8601 timestamp: '" + value + "'");
+        }
+        return value;
+    }
+
+    private static String generatorVersionValue(final Map<?, ?> map) {
+        final String value = stringValue(map, "generatorVersion");
+        if (!isDigitLedVersion(value)) {
+            throw new InvalidManifestException(
+                    "'generatorVersion' must be a version string beginning with a digit: '"
+                            + value + "'");
+        }
+        return value;
+    }
+
+    private static boolean isDigitLedVersion(final String value) {
+        return !value.isEmpty()
+                && value.length() <= MAX_GENERATOR_VERSION_LENGTH
+                && value.charAt(0) >= '0' && value.charAt(0) <= '9';
     }
 
     private static Object require(final Map<?, ?> map, final String key) {

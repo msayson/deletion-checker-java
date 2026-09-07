@@ -73,6 +73,22 @@ class ManifestJsonTest {
     }
 
     @Test
+    void rejectsNestingPastTheDepthLimit() {
+        final InvalidManifestException thrown = assertThrows(InvalidManifestException.class,
+                () -> ManifestJson.parse("[[[[[1]]]]]")); // five arrays, one past the limit
+        assertTrue(thrown.getMessage().contains("nesting"));
+        rejects("[".repeat(100) + "]".repeat(100));
+        rejects("{\"a\":".repeat(100) + "1" + "}".repeat(100));
+    }
+
+    @Test
+    void acceptsNestingWithinTheDepthLimit() {
+        assertEquals(
+                List.of(List.of(List.of(1L))),
+                ManifestJson.parse("[[[1]]]"));
+    }
+
+    @Test
     void rejectsUnterminatedContainers() {
         rejects("{");
         rejects("[");

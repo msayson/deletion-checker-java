@@ -90,7 +90,7 @@ The manifest is a **JSON** file listing every entity type available in a dataset
   "manifestChecksum": "sha256:3b1e7a9c...d2f0"
 }
 ```
-It is read and its checksum verified once at construction, before any entity‑type file is opened. Being JSON, its fields are plain text — no byte‑order concerns apply to the manifest itself (see §5.2 for the binary files' byte order). `manifestChecksum` is a **SHA256** hash (§5.5) — the manifest is small and read once, so the algorithm's slower per‑byte cost doesn't matter, and it is the trust anchor the entity‑type files' weaker CRC32C checks chain from. It's computed over the JSON with the `manifestChecksum` field itself omitted (self‑reference: the field can't hash its own value), using a canonical serialization (stable key order, no incidental whitespace differences) so generation and verification always agree byte‑for‑byte.
+Its `formatVersion` is checked and then its `manifestChecksum` verified once at construction, before any entity‑type file is opened (order rationale in §6.1). Being JSON, its fields are plain text — no byte‑order concerns apply to the manifest itself (see §5.2 for the binary files' byte order). `manifestChecksum` is a **SHA256** hash (§5.5) — the manifest is small and read once, so the algorithm's slower per‑byte cost doesn't matter, and it is the trust anchor the entity‑type files' weaker CRC32C checks chain from. It's computed over the JSON with the `manifestChecksum` field itself omitted (self‑reference: the field can't hash its own value), using a canonical serialization (stable key order, no incidental whitespace differences) so generation and verification always agree byte‑for‑byte.
 
 The three version fields separate previously‑conflated concerns. `formatVersion` is the manifest's own JSON schema version — bumped only when the schema itself changes, never for routine data updates (a §5.4 `K` change never bumps it). Each entity‑type file carries its own, independent `formatVersion` for its binary layout (§5.2), since the JSON schema and the binary schema can evolve on separate timelines. `datasetVersion` identifies which generation run's deletion data this release is — an ISO8601 timestamp rather than a bare date, precise enough for the minute‑level staleness comparisons `loadedAt()` supports in §7.1; `DeletionChecker.datasetVersion()` returns this value. `generatorVersion` is the semver of the build‑time tool that produced the release, useful for tracing a bad artifact back to a specific generator bug.
 
@@ -160,7 +160,7 @@ CRC32C and SHA‑256 provide corruption detection, not artifact authenticity.
 ## **6. Runtime Lookup Flow**
 
 ### **6.1 Construction / Selective Loading**
-1. Read and validate the manifest (checksum) and verify its `formatVersion` is recognized, then look up each requested entity type by name.
+1. Read the manifest, then, in order: verify its `formatVersion` is the recognized schema version, verify its `manifestChecksum`, and look up each requested entity type by name. The version check precedes the checksum deliberately: a manifest written to a newer schema can't be re‑serialized into the canonical form the checksum is computed over, so a checksum‑first order would report version skew as corruption. This is the same version‑then‑checksum order step 3 applies to each entity‑type file.
 2. If a requested entity type is not listed in the manifest, fail at construction — see §10 for the exact exception.
 3. For each requested entity type only: open its file, verify its `formatVersion` is recognized, verify the header's `entityType` matches the manifest entry, verify the file's checksum, and mmap its Prefix Index / Identifier Offset Table / Identifier Data. Any failure here also fails construction (§10).
 4. Entity types not requested are never opened, read, or mapped.
@@ -246,7 +246,10 @@ One mitigating factor, not a reason to under‑budget: unlike heap/anonymous mem
 ---
 
 ## **10. Error Handling**
-- Manifest missing, unreadable, checksum mismatch, or unrecognized `formatVersion` → fail fast during construction.
+- Manifest missing or unreadable → fail fast during construction.
+- Manifest unrecognized `formatVersion` → fail fast during construction (checked before the checksum, §6.1).
+- Manifest `manifestChecksum` malformed or mismatched → fail fast during construction.
+- Manifest structurally malformed — not a JSON object, a missing / duplicated / unknown key, a value of the wrong type or shape (`datasetVersion` not an ISO‑8601 timestamp, `generatorVersion` not a digit‑led version string, `entityType` not 1–64 ASCII bytes, `fileName` not a bare filename, `checksum` not `crc32c:<8 hex>`), a negative `identifierCount`, a duplicate `entityType`, or nesting past a small fixed depth limit → fail fast during construction.
 - Requested entity type not present in the manifest → throw `IllegalArgumentException` at construction, naming the unsupported entity type.
 - A requested entity type's file missing, unreadable, header `entityType` mismatch, unrecognized `formatVersion`, or checksum mismatch → fail fast during construction; dataset is treated as corrupted (distinct from "unsupported entity type" — this is a valid entity type whose data can't be trusted). An unrecognized `formatVersion` specifically means this runtime is too old (or too new) for the artifact, not that it's corrupted — worth a distinct message even though the fail‑fast behavior is the same.
 - `isDeleted`/`filter` called with an entity type that was not requested at construction → throw `IllegalArgumentException`, even if that entity type exists in the manifest.

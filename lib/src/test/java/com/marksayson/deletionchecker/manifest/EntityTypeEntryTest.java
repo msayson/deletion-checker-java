@@ -23,6 +23,15 @@ class EntityTypeEntryTest {
     }
 
     @Test
+    void crc32cReferenceRendersEightLowercaseHexDigitsAndRoundTrips() {
+        assertEquals("crc32c:0000000a", EntityTypeEntry.crc32cReference(0x0AL));
+        assertEquals("crc32c:deadbeef", EntityTypeEntry.crc32cReference(0xDEADBEEFL));
+
+        final String reference = EntityTypeEntry.crc32cReference(0xE3069283L);
+        assertEquals(reference, new EntityTypeEntry("u", "u.dat", 1, reference).checksum());
+    }
+
+    @Test
     void rejectsANegativeIdentifierCount() {
         rejects("user", "u.dat", -1, VALID_CHECKSUM);
     }

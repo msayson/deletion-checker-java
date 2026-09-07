@@ -1,23 +1,12 @@
 plugins {
     `java-library`
-    checkstyle
-    jacoco
-}
-
-repositories {
-    mavenCentral()
+    id("deletionchecker.java-conventions")
 }
 
 dependencies {
     testImplementation(libs.junit.jupiter)
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
 }
 
 // Avoid runtime dependencies, removing risk of version conflicts for library consumers.
@@ -34,56 +23,12 @@ val checkNoRuntimeDependencies by tasks.registering {
     }
 }
 
-checkstyle {
-    toolVersion = libs.versions.checkstyle.get()
-    maxWarnings = 0
-}
-
-jacoco {
-    toolVersion = libs.versions.jacoco.get()
-}
-
 tasks.named<Jar>("jar") {
     manifest {
         attributes("Automatic-Module-Name" to "com.marksayson.deletionchecker")
     }
 }
 
-tasks.named<Test>("test") {
-    useJUnitPlatform()
-    // Turn a hung test (e.g. a broken binary search) into a fast failure instead of a stuck CI job.
-    // separate_thread is required: the default mode only checks elapsed time after the method returns.
-    systemProperty("junit.jupiter.execution.timeout.testable.method.default", "10s")
-    systemProperty("junit.jupiter.execution.timeout.thread.mode.default", "separate_thread")
-    finalizedBy(tasks.named("jacocoTestReport"))
-}
-
-tasks.named<JacocoReport>("jacocoTestReport") {
-    dependsOn(tasks.named("test"))
-    reports {
-        xml.required = true
-        html.required = true
-    }
-}
-
-tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
-    dependsOn(tasks.named("test"))
-    violationRules {
-        rule {
-            limit {
-                counter = "LINE"
-                value = "COVEREDRATIO"
-                minimum = "0.90".toBigDecimal()
-            }
-            limit {
-                counter = "BRANCH"
-                value = "COVEREDRATIO"
-                minimum = "0.90".toBigDecimal()
-            }
-        }
-    }
-}
-
 tasks.named("check") {
-    dependsOn(tasks.named("jacocoTestCoverageVerification"), checkNoRuntimeDependencies)
+    dependsOn(checkNoRuntimeDependencies)
 }

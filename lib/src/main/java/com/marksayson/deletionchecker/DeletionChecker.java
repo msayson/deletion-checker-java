@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -98,8 +97,7 @@ public final class DeletionChecker {
         for (final EntityTypeEntry entry : selected) {
             final PackedDeletionSet set = PackedDeletionSet.open(
                     datasetDirectory.resolve(entry.fileName()), entry.entityType());
-            final String fileChecksum =
-                    "crc32c:" + HexFormat.of().toHexDigits((int) set.checksum());
+            final String fileChecksum = EntityTypeEntry.crc32cReference(set.checksum());
             if (!fileChecksum.equals(entry.checksum())) {
                 throw new CorruptDatasetException(
                         "checksum mismatch for entity type '" + entry.entityType()

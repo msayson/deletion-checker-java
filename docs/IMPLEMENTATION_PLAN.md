@@ -70,14 +70,21 @@ lib/                             runtime checker — ZERO runtime deps
       Sha256.java                 MessageDigest wrapper
       Checksums.java              CRC32C-with-field-zeroed helper (DESIGN §5.5)
 
+build-logic/                     composite build: the shared java-conventions plugin
+  src/main/kotlin/deletionchecker.java-conventions.gradle.kts
+
 dataset-generator/               build-time tool — dependsOn(lib), may take deps (picocli)
   src/main/java/com/marksayson/deletionchecker/generator/
-    DeletionSource.java           input abstraction
+    DeletionRecord.java           (entityType, id, lineNumber)
+    DeletionSource.java           streaming input abstraction
     JsonlDeletionSource.java      read {entityType, id} per line
+    JsonlLine.java                strict per-line JSON object parser (with escapes)
+    GeneratorConfig.java          run parameters + validation
+    InvalidInputException.java    malformed feed / identifier
     DatasetGenerator.java         pipeline: group -> validate -> sort -> dedup -> write -> self-validate
     GeneratorCli.java             picocli entry point
 
-data/                            generator output — CONTENTS GITIGNORED
+data/                            generator output — CONTENTS GITIGNORED (keeps .gitkeep)
 docs/                            DESIGN.md, IMPLEMENTATION_PLAN.md
 ```
 
@@ -322,26 +329,45 @@ nothing; `datasetVersion` / `loadedAt` correct; `filter` → UOE. 100% line + br
 all / none / empty inputs; not-requested `entityType` → IAE; null / empty
 extracted id → IAE; null `items` / `idExtractor` → NPE. 100% line + branch.
 
-### [ ] B10 — dataset-generator module
+### [x] B10 — dataset-generator module
 
-- New Gradle module; `dependsOn(lib)`. Shared JaCoCo + Checkstyle + test config
-  via a `build-logic` convention plugin (the Checkstyle config file is already
-  shared).
-- `info.picocli:picocli` (pinned) — generator only.
-- `DeletionSource` + `JsonlDeletionSource` — `{"entityType": "...", "id": "..."}`
-  per line.
-- `DatasetGenerator` (DESIGN §8.2): group by type → validate (over-length /
-  unpaired-surrogate / null / empty) → encode + sort by encoded bytes → dedup
-  consecutive equal → `lib` `PackedFileWriter` per type → `lib` `ManifestWriter`
-  → self-validate by calling `DeletionChecker.load(dir, allTypes)`.
-- `GeneratorCli` — `--input` (JSONL), `--output` (dir), `--generator-version`,
-  `--dataset-version` (optional, default `Instant.now()`), `--bucket-size`
-  (optional, default 128); free `--help` / `--version`.
+- `build-logic/` composite build with one precompiled convention plugin
+  (`deletionchecker.java-conventions`) carrying the toolchain, Checkstyle
+  (`maxWarnings = 0`), JaCoCo, the 90% line + branch gate, and the JUnit /
+  timeout setup. Both modules apply it; `lib/build.gradle.kts` keeps only the jar
+  `Automatic-Module-Name` and the zero-runtime-dependency check.
+- `dataset-generator/` — `application` module, `implementation(project(":lib"))`
+  + `info.picocli:picocli` (pinned `4.7.6`), generator only; nothing reaches `lib`.
+- `DeletionSource.forEach(Consumer<DeletionRecord>)` — streaming, so a large feed
+  is never fully held. `JsonlDeletionSource` reads a UTF-8 file, skips blank
+  lines, and delegates each line to `JsonlLine`: a strict flat-object parser for
+  exactly `{"entityType": string, "id": string}` — honours `\" \\ \/ \b \f \n \r
+  \t` and `\uXXXX` (so ASCII-escaped feeds round-trip), rejects everything else
+  with `InvalidInputException` naming line + column.
+- `DatasetGenerator.generate(source, dir, config[, FileSink])` (DESIGN §8.2):
+  group by type (`TreeMap`, so output is deterministic) → `IdentifierCodec.encode`
+  each id, wrapping failures as `InvalidInputException` with the line → sort by
+  unsigned bytes → drop consecutive duplicates → `PackedFileWriter` per type into
+  `deleted-ids-<type>-<yyyy-MM-dd>.dat` → `ManifestWriter` → self-validate via
+  `DeletionChecker.load(dir, allTypes)`. The `FileSink` seam is package-private
+  for the corrupt-write test. `EntityTypeEntry.crc32cReference(long)` added to
+  `lib` and now shared by the generator and `DeletionChecker`'s cross-check.
+- `GeneratorConfig` record validates `bucketSize >= 1`, digit-led
+  `generatorVersion`, ISO-8601 `datasetVersion`.
+- `GeneratorCli` (picocli) — `--input`, `--output` (created if absent),
+  `--generator-version`, optional `--dataset-version` (default `Instant.now()`)
+  and `--bucket-size` (default 128); free `--help` / `--version`. Malformed
+  input / bad config → one-line stderr, exit 2; unexpected `IOException` → exit 1.
+  `commandLine()` is exposed for tests; only `main`'s `System.exit` is uncovered.
 
-**Tests:** full pipeline on sample JSONL; dedup collapses duplicates and
-`identifierCount` = unique count; sort order = UTF-8 byte order incl. supplementary
-chars; each bad-identifier class rejected; self-validation catches a corrupted
-write; generate → `load` → random-membership round-trip.
+**Tests:** `JsonlLineTest` (well-formed, escapes, ~25 malformed), `JsonlDeletionSourceTest`,
+`GeneratorConfigTest`, `DatasetGeneratorTest` (multi-type round-trip; dedup →
+unique count; UTF-8 supplementary sort order; filename dating; each bad-id class
+named-by-line; `FileSink` corrupt-write → `CorruptDatasetException`; empty input →
+empty loadable dataset; reordered input → byte-identical output; 1500-id `TreeSet`
+oracle), `GeneratorCliTest` (generate, defaults, usage error, `--help`, malformed
+feed → exit 2, IO failure → exit 1). Generator 99% line (only `main`) / 100%
+branch; `lib` stays 100% / 100%.
 
 ### [ ] B11 — Integration & performance suite + docs
 

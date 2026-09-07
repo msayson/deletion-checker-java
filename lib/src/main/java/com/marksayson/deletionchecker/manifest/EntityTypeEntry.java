@@ -1,5 +1,6 @@
 package com.marksayson.deletionchecker.manifest;
 
+import java.util.HexFormat;
 import java.util.Objects;
 
 /**
@@ -21,6 +22,19 @@ public record EntityTypeEntry(
 
     private static final String CHECKSUM_PREFIX = "crc32c:";
     private static final int CHECKSUM_HEX_LENGTH = 8;
+
+    /**
+     * Renders a CRC32C value as a manifest {@code checksum} reference: {@code "crc32c:"} followed by
+     * the value's low 32 bits as 8 lowercase hex digits. This is the exact string
+     * {@link #checksum()} is validated against and that {@code DeletionChecker} compares each loaded
+     * file's checksum to.
+     *
+     * @param crc32c the CRC32C, as an unsigned 32-bit value in the low bits
+     * @return the {@code checksum} string for a manifest entry
+     */
+    public static String crc32cReference(final long crc32c) {
+        return CHECKSUM_PREFIX + HexFormat.of().toHexDigits((int) crc32c);
+    }
 
     /** Validates the entry. */
     public EntityTypeEntry {

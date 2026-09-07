@@ -29,5 +29,9 @@ replay_pid*
 # Ignore Gradle build output directory
 build
 
+# Generated datasets are release artifacts (~400 MB), not source; keep the directory
+/data/*
+!/data/.gitkeep
+
 # Ignore local Claude settings
 .claude/settings.local.json

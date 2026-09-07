@@ -9,4 +9,4 @@ plugins {
 
 rootProject.name = "deletion-checker-java"
 
-include("lib", "dataset-generator")
+include("lib", "dataset-generator", "benchmarks")

@@ -4,9 +4,10 @@ Local, exact deletion-state lookup over a packed immutable binary dataset. See `
 
 ## Build & test
 - Build: `./gradlew build` (runs Checkstyle + tests via `check`)
-- All tests: `./gradlew test` (excludes `@Tag("perf")`)
+- All tests: `./gradlew test` (excludes `@Tag("perf")` and `@Tag("bench")`)
 - Single test: `./gradlew test --tests "com.marksayson.deletionchecker.DeletionCheckerTest"` (or `--tests "….DeletionCheckerTest.methodName"`)
-- Perf benchmarks (manual, not in `build`): `./gradlew perfTest` (`-Dperf.size=N`)
+- Perf gate (manual, not in `build`): `./gradlew perfTest` (`-Dperf.size=N`)
+- Comparative benchmark (manual, local only): `./gradlew :benchmarks:benchmark` — see `docs/benchmarks/`
 - Lint only: `./gradlew checkstyleMain checkstyleTest`
 - Java version: 21 (Gradle toolchain, set by the `deletionchecker.java-conventions` plugin in `build-logic/`)
 
@@ -17,9 +18,10 @@ Local, exact deletion-state lookup over a packed immutable binary dataset. See `
 ## Module layout
 - `lib/` — the deletion-checker library (package `com.marksayson.deletionchecker`). Zero runtime dependencies. Sources in `lib/src/main/java`, tests in `lib/src/test/java`.
 - `dataset-generator/` — build-time CLI (package `…deletionchecker.generator`) that packs a JSONL feed into a dataset. `dependsOn(lib)`, may take its own deps (picocli); nothing reaches `lib`.
+- `benchmarks/` — local-only comparative benchmark vs `HashSet<String>` (`@Tag("bench")`, `./gradlew :benchmarks:benchmark`). Opts out of the coverage gate; not in `check` or CI. See `docs/benchmarks/`.
 - `build-logic/` — the shared Gradle convention plugin (`deletionchecker.java-conventions`).
 - `data/` — generated `.dat` datasets; contents gitignored (keeps `.gitkeep`).
-- `docs/` — design docs (`DESIGN.md`, `IMPLEMENTATION_PLAN.md`).
+- `docs/` — design docs (`DESIGN.md`, `IMPLEMENTATION_PLAN.md`), benchmark results (`benchmarks/`).
 
 ## Invariants
 - Public API is `isDeleted` and `filter`. Signatures in `docs/DESIGN.md` §1; don't change them.
@@ -31,4 +33,4 @@ Local, exact deletion-state lookup over a packed immutable binary dataset. See `
 - New/changed functionality needs tests in the matching `src/test/java`.
 - `./gradlew build` enforces ≥90% line + branch coverage per module (JaCoCo, hard-fail); reports at `<module>/build/reports/jacoco/test/html/index.html`. `perfTest` exec data is excluded from coverage.
 - `check` also runs `checkNoRuntimeDependencies` — `lib` must resolve zero runtime deps.
-- End-to-end tests (`DatasetIntegrationTest`) and perf benchmarks (`LookupPerfTest`, `@Tag("perf")`) build fixtures via `lib`'s own writers — no binary files are checked in.
+- End-to-end tests (`DatasetIntegrationTest`) and benchmarks (`LookupPerfTest` `@Tag("perf")`, `ComparativeBenchmarkTest` `@Tag("bench")`) build fixtures via the writers / generator — no binary files are checked in.

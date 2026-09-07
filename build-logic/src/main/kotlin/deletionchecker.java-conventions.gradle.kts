@@ -16,6 +16,14 @@ repositories {
 
 val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
 
+// `deletioncheckerConventions { enforceCoverageGate = false }` opts a module out of the 90% gate —
+// used by :benchmarks, whose sources are all @Tag("bench") harness code excluded from `test`.
+interface DeletioncheckerConventionsExtension {
+    val enforceCoverageGate: org.gradle.api.provider.Property<Boolean>
+}
+val conventions = extensions.create<DeletioncheckerConventionsExtension>("deletioncheckerConventions")
+conventions.enforceCoverageGate.convention(true)
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -33,7 +41,7 @@ jacoco {
 
 tasks.named<Test>("test") {
     useJUnitPlatform {
-        excludeTags("perf")
+        excludeTags("perf", "bench")
     }
     // Turn a hung test (e.g. a broken binary search) into a fast failure instead of a stuck CI job.
     // separate_thread is required: the default mode only checks elapsed time after the method returns.
@@ -49,6 +57,7 @@ tasks.register<Test>("perfTest") {
     group = "verification"
     useJUnitPlatform {
         includeTags("perf")
+        excludeTags("bench")
     }
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
@@ -87,6 +96,10 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     }
 }
 
-tasks.named("check") {
-    dependsOn(tasks.named("jacocoTestCoverageVerification"))
+afterEvaluate {
+    if (conventions.enforceCoverageGate.get()) {
+        tasks.named("check") {
+            dependsOn(tasks.named("jacocoTestCoverageVerification"))
+        }
+    }
 }

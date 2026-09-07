@@ -19,6 +19,7 @@ See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout, a
 | --- | --- |
 | `lib/` | The runtime library (`com.marksayson.deletionchecker`). Zero runtime dependencies. |
 | `dataset-generator/` | Build-time CLI that turns a deletion feed into a packed dataset. Depends on `lib`; not shipped to services. |
+| `benchmarks/` | Local-only comparative benchmark vs a `HashSet<String>` baseline ([docs/benchmarks/](docs/benchmarks/)). |
 | `build-logic/` | Shared Gradle conventions (toolchain, Checkstyle, JaCoCo gate). |
 
 ## Using the library
@@ -91,8 +92,9 @@ Malformed input exits `2` with a one-line message naming the offending line.
 | | |
 | --- | --- |
 | `./gradlew build` | compile, Checkstyle, tests, and the ≥90% line + branch coverage gate |
-| `./gradlew test` | tests only (excludes `@Tag("perf")`) |
-| `./gradlew perfTest` | latency benchmarks; manual, not part of `build`. `-Dperf.size=N` sets the identifier count (default 1,000,000) |
+| `./gradlew test` | tests only (excludes `@Tag("perf")` and `@Tag("bench")`) |
+| `./gradlew perfTest` | p99.9 lookup-latency gate; manual, not part of `build`. `-Dperf.size=N` (default 1,000,000) |
+| `./gradlew :benchmarks:benchmark` | full packed-vs-`HashSet` comparison; local only, ~15-25 min. See [docs/benchmarks/](docs/benchmarks/) |
 | `./gradlew checkstyleMain checkstyleTest` | lint only |
 
 Java 21 (Gradle toolchain). Test fixtures are built programmatically via `lib`'s own writers; no

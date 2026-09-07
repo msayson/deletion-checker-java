@@ -203,24 +203,34 @@ identifier offsets strictly monotonic and each slice reconstructs its identifier
 `separatorData` sits after both int tables, not interleaved; default-`K` overload
 matches explicit; mis-sort / duplicate / bad entityType / bad `K` rejected.
 
-### [ ] B6 — PackedDeletionSet + BinarySearch
+### [x] B6 — PackedDeletionSet + BinarySearch
 
-- `PackedDeletionSet.open(Path)` — `FileChannel.map` → `MappedByteBuffer`; validate
-  magic / recognized `formatVersion` / header `entityType`; verify the file
-  checksum; expose read-only region views. The `FileChannel` may be closed after
-  mapping.
-- `contains(byte[] id) -> boolean` — `PrefixIndex.selectBucket` over the mmap'd
-  separators → `BinarySearch` in the bucket's entry range. `identifierCount == 0`
-  short-circuits to `false`.
-- `BinarySearch` — lexicographic byte compare, zero allocation, absolute indexing.
-- Error taxonomy (§10): unrecognized `formatVersion` → distinct version-mismatch
-  message; checksum / `entityType` mismatch → "corrupted".
+- `PackedDeletionSet.open(Path, String expectedEntityType)` — `FileChannel.map` →
+  `MappedByteBuffer` (channel closed straight after; mapping survives). Validation
+  order: `Header.readFrom` (magic → corrupt, `formatVersion` → version mismatch)
+  → whole-file CRC32C → `entityType` == expected (→ corrupt) → structural parse.
+  A file shorter than the header → corrupt. `IOException` propagates for a
+  missing / unreadable file.
+- The small prefix-index tables (`startIndex`, `separatorOffset`, `separatorData`)
+  are lifted onto the heap and handed to `PrefixIndex.fromParts` (new factory) —
+  they are hot and reused every query; the large identifier offset table and
+  identifier data stay in the mapping.
+- `contains(byte[] id) -> boolean` — `identifierCount == 0` short-circuits to
+  `false`, else `PrefixIndex.selectBucket` → `BinarySearch` over the bucket's
+  range. All buffer access is absolute-index, no mutable state → safe for
+  concurrent callers. Also exposes `entityType()` / `identifierCount()`.
+- `BinarySearch.contains` (package-private) — floor-free exact match, unsigned
+  byte compare via `UnsignedBytes` against the mmap'd data, zero allocation.
 
-**Tests** (fixtures via B5): hits and misses across multiple buckets; boundary
-queries; empty → `false`; single id; all-identical; supplementary-char ids;
-flipped byte → checksum failure; truncated file; bad magic; unrecognized
-`formatVersion` → distinct message; header `entityType` ≠ expected; concurrent
-`contains` from multiple threads.
+**Tests:** `BinarySearchTest` over a hand-built buffer (every position, misses
+before/between/after, prefix vs full match, empty / single range).
+`PackedDeletionSetTest` (fixtures via B5): 500-id / many-bucket hits+misses;
+empty → `false`; single id; supplementary-char ids incl. a near-miss; 3000-id
+`TreeSet` oracle for random membership; 8-thread concurrent `contains`; flipped
+byte / truncation (head and tail) → corrupt; bad magic → corrupt; patched
+`formatVersion` → `UnsupportedFormatVersionException` (before CRC); entityType
+mismatch → corrupt; missing file → `IOException`. (All-identical ids is a
+generator/dedup concern, not reachable here.)
 
 ### [ ] B7 — DatasetManifest
 

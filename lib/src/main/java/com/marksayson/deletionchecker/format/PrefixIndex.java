@@ -59,6 +59,28 @@ public final class PrefixIndex {
     }
 
     /**
+     * Reassembles an index from its serialized tables, as read back from a packed file. The arrays
+     * are taken as-is — not copied or validated — since the file's checksum has already been
+     * verified, so they are exactly what {@link #build} produced.
+     *
+     * @param identifierCount the identifier count from the file header
+     * @param bucketCount the bucket count from the file header
+     * @param startIndex the {@code startIndex} table ({@code bucketCount + 1} entries)
+     * @param separatorOffset the {@code separatorOffset} table ({@code bucketCount + 1} entries)
+     * @param separatorData the contiguous {@code separatorData} block
+     * @return the reassembled index
+     */
+    static PrefixIndex fromParts(
+            final int identifierCount,
+            final int bucketCount,
+            final int[] startIndex,
+            final int[] separatorOffset,
+            final byte[] separatorData) {
+        return new PrefixIndex(
+                identifierCount, bucketCount, startIndex, separatorOffset, separatorData);
+    }
+
+    /**
      * Builds an index over {@code sortedIdentifiers} with the given bucket target size.
      *
      * @param sortedIdentifiers the identifiers, already sorted by unsigned bytes and deduplicated

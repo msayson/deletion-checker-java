@@ -6,7 +6,7 @@ import java.util.Objects;
  * One entity type's entry in the dataset manifest.
  *
  * @param entityType the entity type name; 1 to {@value #MAX_ENTITY_TYPE_LENGTH} ASCII characters,
- *     matching the entity type's packed-file header (DESIGN §5.2)
+ *     matching the entity type's packed-file header
  * @param fileName the packed file's name — a bare filename with no directory separators, resolved
  *     relative to the dataset directory
  * @param identifierCount the number of unique identifiers the file holds; never negative
@@ -16,7 +16,7 @@ import java.util.Objects;
 public record EntityTypeEntry(
         String entityType, String fileName, long identifierCount, String checksum) {
 
-    /** Maximum length, in ASCII characters, of {@link #entityType} (DESIGN §5.2). */
+    /** Maximum length, in ASCII characters, of {@link #entityType}. */
     public static final int MAX_ENTITY_TYPE_LENGTH = 64;
 
     private static final String CHECKSUM_PREFIX = "crc32c:";

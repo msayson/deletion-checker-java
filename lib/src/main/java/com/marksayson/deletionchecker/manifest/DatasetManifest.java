@@ -14,8 +14,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * A parsed, verified dataset manifest (DESIGN §5.1): the release's three version fields plus one
- * entry per available entity type.
+ * A parsed, verified dataset manifest: the release's three version fields plus one entry per
+ * available entity type.
  *
  * @param formatVersion the manifest JSON schema version (always {@link #SUPPORTED_FORMAT_VERSION}
  *     for an instance returned by {@link #read})

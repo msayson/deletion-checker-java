@@ -211,9 +211,52 @@ class DeletionCheckerTest {
     }
 
     @Test
-    void filterIsNotYetImplemented() throws IOException {
+    void filterKeepsNonDeletedItemsInInputOrder() throws IOException {
+        final DeletionChecker checker = loadSingleType("user", ids("bob", "dave"));
+
+        assertEquals(
+                List.of("erin", "alice", "carol"),
+                checker.filter(
+                        "user",
+                        List.of("erin", "bob", "alice", "dave", "carol"),
+                        id -> id));
+    }
+
+    @Test
+    void filterHandlesAllNoneAndEmptyInputs() throws IOException {
+        final DeletionChecker checker = loadSingleType("user", ids("a", "b"));
+
+        assertEquals(List.of(), checker.filter("user", List.of("a", "b"), id -> id));
+        assertEquals(List.of("x", "y"), checker.filter("user", List.of("x", "y"), id -> id));
+        assertEquals(List.of(), checker.filter("user", List.<String>of(), id -> id));
+    }
+
+    @Test
+    void filterRejectsANotRequestedEntityType() throws IOException {
+        writeManifest(writeType("user", ids("a")), writeType("order", ids("b")));
+        final DeletionChecker checker = DeletionChecker.load(datasetDir, Set.of("user"));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> checker.filter("order", List.of("b"), id -> id));
+    }
+
+    @Test
+    void filterRejectsAnInvalidExtractedIdentifier() throws IOException {
         final DeletionChecker checker = loadSingleType("user", ids("a"));
-        assertThrows(UnsupportedOperationException.class,
-                () -> checker.filter("user", List.of("a"), id -> id));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> checker.filter("user", List.of("a", "b"), id -> null));
+        assertThrows(IllegalArgumentException.class,
+                () -> checker.filter("user", List.of("a", "b"), id -> ""));
+    }
+
+    @Test
+    void filterRejectsNullArguments() throws IOException {
+        final DeletionChecker checker = loadSingleType("user", ids("a"));
+
+        assertThrows(NullPointerException.class,
+                () -> checker.<String>filter("user", null, id -> id));
+        assertThrows(NullPointerException.class,
+                () -> checker.filter("user", List.of("a"), null));
     }
 }

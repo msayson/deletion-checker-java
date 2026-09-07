@@ -308,15 +308,19 @@ CRC → `CorruptDatasetException`; not-requested type at `isDeleted` → IAE; nu
 empty / over-long / unpaired-surrogate id → IAE; empty requested set opens
 nothing; `datasetVersion` / `loadedAt` correct; `filter` → UOE. 100% line + branch.
 
-### [ ] B9 — filter
+### [x] B9 — filter
 
 - `<T> List<T> filter(String entityType, List<T> items, Function<T, String> idExtractor)`
-  — resolve `entityType` once, then iterate: extract id → `isDeleted` → keep
-  non-deleted, preserving input order.
+  — null-check `items` / `idExtractor` (NPE), resolve `entityType` once via the
+  shared `setFor` helper, then iterate: `idExtractor.apply` → `IdentifierCodec.encode`
+  → `PackedDeletionSet.contains`, appending non-deleted items to a new
+  `ArrayList<>(items.size())`, preserving input order. `isDeleted` now delegates to
+  the same `setFor`.
 - Prefix-bucket-reuse batching (§6.3) is a later additive optimization.
 
-**Tests:** all / none / mixed deleted; empty list; input order preserved; null or
-empty extracted id → IAE; not-requested `entityType` → IAE.
+**Tests:** `DeletionCheckerTest` — mixed deleted with input order preserved;
+all / none / empty inputs; not-requested `entityType` → IAE; null / empty
+extracted id → IAE; null `items` / `idExtractor` → NPE. 100% line + branch.
 
 ### [ ] B10 — dataset-generator module
 

@@ -1,7 +1,7 @@
 package com.marksayson.deletionchecker.manifest;
 
 /**
- * Renders a manifest to the JSON written to disk: the canonical form (DESIGN: keys ascending, no
+ * Renders a manifest to the JSON written to disk: the canonical form (keys ascending, no
  * insignificant whitespace) with a trailing {@code manifestChecksum} field holding the SHA-256 of
  * the canonical form <em>without</em> that field.
  *

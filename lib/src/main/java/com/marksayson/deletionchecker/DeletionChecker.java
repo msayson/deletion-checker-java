@@ -33,8 +33,8 @@ import java.util.function.Function;
  * Lookups are exact: no false positives or negatives.
  *
  * <p>The mapped files are held for the life of the process; there is no {@code close}. Their pages
- * are off-heap, file-backed memory that counts toward process RSS and container memory limits
- * (DESIGN §9.1), not toward the Java heap.
+ * are off-heap, file-backed memory that counts toward process RSS and container memory limits,
+ * not toward the Java heap.
  *
  * <p>Instances are thread-safe after {@link #load} returns.
  */
@@ -83,7 +83,7 @@ public final class DeletionChecker {
         final DatasetManifest manifest =
                 DatasetManifest.read(datasetDirectory.resolve(DatasetManifest.FILE_NAME));
 
-        // Resolve every requested type against the manifest before opening any file (DESIGN §6.1).
+        // Resolve every requested type against the manifest before opening any file.
         final List<EntityTypeEntry> selected = new ArrayList<>();
         for (final String entityType : entityTypes) {
             final Optional<EntityTypeEntry> entry = manifest.entry(entityType);
@@ -130,13 +130,7 @@ public final class DeletionChecker {
      *     an unpaired surrogate
      */
     public boolean isDeleted(final String entityType, final String id) {
-        final PackedDeletionSet set = sets.get(entityType);
-        if (set == null) {
-            throw new IllegalArgumentException(
-                    "entity type '" + entityType
-                            + "' was not requested when this DeletionChecker was loaded");
-        }
-        return set.contains(IdentifierCodec.encode(id));
+        return setFor(entityType).contains(IdentifierCodec.encode(id));
     }
 
     /**
@@ -144,7 +138,7 @@ public final class DeletionChecker {
      * in their original order.
      *
      * <p>Equivalent to calling {@link #isDeleted} on each item's extracted identifier and keeping
-     * those that are not deleted.
+     * those that are not deleted, but resolves {@code entityType} once for the whole batch.
      *
      * @param <T> the item type
      * @param entityType the entity type to query; must have been requested when this instance was
@@ -152,18 +146,39 @@ public final class DeletionChecker {
      * @param items the items to filter
      * @param idExtractor maps an item to the identifier to check
      * @return a new list containing only the items that are not deleted, in input order
+     * @throws NullPointerException if {@code items} or {@code idExtractor} is null
      * @throws IllegalArgumentException if {@code entityType} was not requested when this instance was
      *     loaded, or if an extracted identifier is null, empty, exceeds 36 bytes when UTF-8 encoded,
      *     or contains an unpaired surrogate
      */
     public <T> List<T> filter(
             final String entityType, final List<T> items, final Function<T, String> idExtractor) {
-        throw new UnsupportedOperationException("filter is implemented in a later batch");
+        final PackedDeletionSet set = setFor(entityType);
+        Objects.requireNonNull(items, "items");
+        Objects.requireNonNull(idExtractor, "idExtractor");
+
+        final List<T> kept = new ArrayList<>(items.size());
+        for (final T item : items) {
+            if (!set.contains(IdentifierCodec.encode(idExtractor.apply(item)))) {
+                kept.add(item);
+            }
+        }
+        return kept;
+    }
+
+    private PackedDeletionSet setFor(final String entityType) {
+        final PackedDeletionSet set = sets.get(entityType);
+        if (set == null) {
+            throw new IllegalArgumentException(
+                    "entity type '" + entityType
+                            + "' was not requested when this DeletionChecker was loaded");
+        }
+        return set;
     }
 
     /**
      * Returns the loaded release's {@code datasetVersion} — the ISO-8601 timestamp identifying which
-     * generation run's deletion data this instance holds (DESIGN §5.1, §7.1).
+     * generation run's deletion data this instance holds.
      *
      * @return the dataset version string
      */
@@ -173,8 +188,7 @@ public final class DeletionChecker {
 
     /**
      * Returns the instant {@link #load} completed, i.e. when this instance's dataset became active.
-     * Operators use it with {@link #datasetVersion()} to spot instances running a stale release
-     * (DESIGN §7.1).
+     * Operators use it with {@link #datasetVersion()} to spot instances running a stale release.
      *
      * @return the load-completion instant
      */

@@ -181,19 +181,27 @@ out-of-range / non-ASCII entityType field → corrupt. `Checksums`: field-zeroed
 CRC32C == hashing a modified copy (field at start / middle / end); honours
 `limit` as end-of-file; buffer position/limit unchanged.
 
-### [ ] B5 — PackedFileWriter
+### [x] B5 — PackedFileWriter
 
-- Input: `entityType` + an **already sorted and deduped** `List<byte[]>` + `K`
-  (precondition asserted).
-- Emit, in order: header, prefix index (B3 struct), identifier offset table
-  (`N + 1` LE offsets), identifier data. Compute the CRC32C with the checksum
-  field zeroed, patch it into the header.
-- `OffsetTableBuilder` lands here.
+- `PackedFileWriter.write(entityType, List<byte[]>, [bucketSize])` (public — the
+  generator and fixtures call it; never on the lookup path) → `byte[]`.
+- Input must be strictly ascending by unsigned bytes: `write` **verifies** this
+  (one O(n) pass) and throws `IllegalArgumentException` on a mis-sort or a
+  duplicate — a hard check, not `assert`, since a bad file would otherwise fail
+  only at query time. `entityType` / `bucketSize` validation delegates to `Header`
+  / `PrefixIndex`.
+- Emits, in order: header · `startIndex` · `separatorOffset` · `separatorData` ·
+  identifier offset table (`N+1`) · identifier data. All three offset tables are
+  int32 LE; identifier offsets are block-relative. Then `crc32cWithFieldZeroed`
+  over the whole buffer, patched into the header.
+- `OffsetTableBuilder.cumulativeOffsets` (package-private) lands here.
 
-**Tests:** write → parse back, assert every section; `n` = 0, 1, multi-bucket;
-checksum self-verifies; offsets strictly monotonic; `separatorData` contiguous,
-not interleaved with `startIndex`. Structural only — membership is B6's job via
-the real reader.
+**Tests:** write → parse the long way (not via the not-yet-existing reader),
+assert every section against `PrefixIndex` + the raw bytes; `n` = 0 / 1 /
+multi-bucket; exact file length (no trailing bytes); checksum self-verifies;
+identifier offsets strictly monotonic and each slice reconstructs its identifier;
+`separatorData` sits after both int tables, not interleaved; default-`K` overload
+matches explicit; mis-sort / duplicate / bad entityType / bad `K` rejected.
 
 ### [ ] B6 — PackedDeletionSet + BinarySearch
 

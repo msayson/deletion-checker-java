@@ -1,6 +1,6 @@
 # deletion-checker-java
 
-Local, exact deletion-state lookup over a packed immutable binary dataset. See `docs/DESIGN.md` for architecture and binary layout.
+Local, exact deletion-state lookup over a packed immutable binary dataset. See `docs/DESIGN.md` for architecture and binary layout, `DEVELOPMENT.md` for the human-facing build/test/layout guide, `README.md` for user-facing usage.
 
 ## Build & test
 - Build: `./gradlew build` (runs Checkstyle + tests via `check`)
@@ -21,7 +21,7 @@ Local, exact deletion-state lookup over a packed immutable binary dataset. See `
 - `benchmarks/` — local-only comparative benchmark vs `HashSet<String>` (`@Tag("bench")`, `./gradlew :benchmarks:benchmark`). Opts out of the coverage gate; not in `check` or CI. See `docs/benchmarks/`.
 - `build-logic/` — the shared Gradle convention plugin (`deletionchecker.java-conventions`).
 - `data/` — generated `.dat` datasets; contents gitignored (keeps `.gitkeep`).
-- `docs/` — design docs (`DESIGN.md`, `IMPLEMENTATION_PLAN.md`), benchmark results (`benchmarks/`).
+- `docs/` — `DESIGN.md` (architecture + binary layout), `DECISIONS.md` (invariants + decision log), benchmark results (`benchmarks/`).
 
 ## Invariants
 - Public API is `isDeleted` and `filter`. Signatures in `docs/DESIGN.md` §1; don't change them.

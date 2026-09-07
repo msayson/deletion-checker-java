@@ -1,26 +1,31 @@
 # deletion-checker-java
 
-Local, exact **deletion-state lookup** for services that need to know whether an entity ID has been
-deleted — without a runtime network call. A build-time tool packs the deleted IDs into an immutable
-binary dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only
-the entity types a service asks for and answers membership with a two-level binary search.
+**deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime
+network call. A build-time generator converts deleted IDs into an immutable, checksummed
+dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the
+entity types a service asks for.
 
-- **Exact** — no false positives or negatives; IDs are compared as raw UTF-8 bytes, never hashed.
+- **Exact** — no false positives or negatives. The Bloom filter quickly rejects definite misses, but every possible match is verified against the stored UTF-8 bytes.
 - **Sub-millisecond** p99.9 lookup; low GC overhead on the hot path.
 - **Selective** — a service pays memory and startup cost only for the entity types it loads.
 - **Zero runtime dependencies** in the library.
 
-See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout, and
-[`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) for build history.
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout.
 
-## Modules
+## When to use this?
 
-| Module | Purpose |
+`HashSet<String>` wins raw positive-lookup latency. `DeletionChecker` is designed to reduce heap usage, GC pressure, and startup time, and loads only the entity types a service needs.
+
+| Situation | Use |
 | --- | --- |
-| `lib/` | The runtime library (`com.marksayson.deletionchecker`). Zero runtime dependencies. |
-| `dataset-generator/` | Build-time CLI that turns a deletion feed into a packed dataset. Depends on `lib`; not shipped to services. |
-| `benchmarks/` | Local-only comparative benchmark vs a `HashSet<String>` baseline ([docs/benchmarks/](docs/benchmarks/)). |
-| `build-logic/` | Shared Gradle conventions (toolchain, Checkstyle, JaCoCo gate). |
+| One set, small enough to sit in heap, already loaded from your own store | `HashSet<String>` |
+| Millions of IDs | `DeletionChecker` |
+| Several entity types, each service needs a different subset | `DeletionChecker` |
+| Tight container memory limit or a GC-pause SLA | `DeletionChecker` |
+| Frequent restarts and large deletion sets | `DeletionChecker` |
+| Need a versioned, checksummed, distributable dataset | `DeletionChecker` |
+
+See [`docs/benchmarks/analysis.md`](docs/benchmarks/analysis.md) for measured trade-offs.
 
 ## Using the library
 
@@ -47,13 +52,12 @@ with an entity type that was not requested at load throws `IllegalArgumentExcept
 that is null, empty, over 36 UTF-8 bytes, or contains an unpaired surrogate also throws
 `IllegalArgumentException`.
 
-### Memory accounting
+### Memory
 
-The dataset is **off-heap, file-backed memory**. Mapping a file does not add to the Java heap, but as
-lookups touch pages, page cache / RSS / page-table entries accumulate and count toward a container's
-memory limit the same as any resident memory. Size container limits assuming the full working set of
-the requested entity types can become resident. Clean file-backed pages are reclaimable by the kernel
-under pressure without an OOM kill, but do not under-budget on that basis.
+Dataset files are memory-mapped: they don't count against the Java heap, but resident pages count
+toward process RSS and container memory limits like any other memory. Size container limits for the
+full working set of the entity types a service loads. See [`docs/DESIGN.md`](docs/DESIGN.md) §9.1 for
+details.
 
 ## Generating a dataset
 
@@ -88,15 +92,6 @@ bytes, drops duplicates, writes one packed file per type plus `manifest.json`, t
 by loading the result with `DeletionChecker`. A given input always produces byte-identical output.
 Malformed input exits `2` with a one-line message naming the offending line.
 
-## Build & test
+## Contributing
 
-| | |
-| --- | --- |
-| `./gradlew build` | compile, Checkstyle, tests, and the ≥90% line + branch coverage gate |
-| `./gradlew test` | tests only (excludes `@Tag("perf")` and `@Tag("bench")`) |
-| `./gradlew perfTest` | p99.9 lookup-latency gate; manual, not part of `build`. `-Dperf.size=N` (default 1,000,000) |
-| `./gradlew :benchmarks:benchmark` | full packed-vs-`HashSet` comparison; local only, ~15-25 min. See [docs/benchmarks/](docs/benchmarks/) |
-| `./gradlew checkstyleMain checkstyleTest` | lint only |
-
-Java 21 (Gradle toolchain). Test fixtures are built programmatically via `lib`'s own writers; no
-binary files are checked in.
+Building, testing, and repo layout are in [`DEVELOPMENT.md`](DEVELOPMENT.md).

@@ -22,10 +22,10 @@ import java.util.Objects;
 import java.util.TreeMap;
 
 /**
- * The build-time pipeline that turns a {@link DeletionSource} into a packed dataset directory
- * (DESIGN §8.2): group by entity type, validate and UTF-8-encode each identifier, sort by encoded
- * bytes, drop consecutive duplicates, write one packed file per entity type plus {@code
- * manifest.json}, then self-validate the whole thing by loading it with {@link DeletionChecker}.
+ * The build-time pipeline that turns a {@link DeletionSource} into a packed dataset directory:
+ * group by entity type, validate and UTF-8-encode each identifier, sort by encoded bytes,
+ * drop consecutive duplicates, write one packed file per entity type plus {@code manifest.json},
+ * then self-validate the whole thing by loading it with {@link DeletionChecker}.
  *
  * <p>Entity types and their files are emitted in ascending entity-type order so a given input always
  * produces byte-identical output.

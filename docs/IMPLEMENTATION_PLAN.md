@@ -369,16 +369,31 @@ oracle), `GeneratorCliTest` (generate, defaults, usage error, `--help`, malforme
 feed → exit 2, IO failure → exit 1). Generator 99% line (only `main`) / 100%
 branch; `lib` stays 100% / 100%.
 
-### [ ] B11 — Integration & performance suite + docs
+### [x] B11 — Integration & performance suite + docs
 
-- Integration tests (DESIGN §11): real multi-entity-type dataset with a partial
-  selection; boundary datasets (empty, single identifier, all-identical, many
-  duplicates); random membership validation per loaded type.
-- Performance tests — `@Tag("perf")` via `perfTest`: p99.9 sub-millisecond lookup;
-  negative-lookup latency baseline. Manual; CI gating tracked separately.
-- Docs: README usage + the §9.1 note that dataset memory is off-heap, file-backed,
-  and counts toward process RSS / container limits; resolve DESIGN §13 if anything
-  changed.
+- `DatasetIntegrationTest` (in `dataset-generator`, the only module that sees both
+  the generator and the checker): `DatasetGenerator.generate` → `DeletionChecker.load`
+  → membership, for partial entity-type selection (unrequested file deletable
+  after load), empty / single-id / all-identical / heavily-duplicated boundaries
+  (`identifierCount` == unique count), and a per-type `TreeSet` oracle over two
+  types. Runs in `check`.
+- `LookupPerfTest` (`lib`, `@Tag("perf")`) — builds an N-id dataset (`-Dperf.size`,
+  default 1,000,000) via the writers, loads it, warms up, then times `MEASURED`
+  `isDeleted` calls and asserts p99.9 < 1 ms for a present id and for an absent id
+  that misses at a bucket leaf (`key + "."`). Prints p50/p99/p99.9/max in µs.
+- `deletionchecker.java-conventions` now: `test` excludes tag `perf`; a manual
+  `perfTest` task (`Test`, tag `perf` only, 2 GB heap, `perf.size` passthrough,
+  standard-stream logging) that is **not** wired into `check` and whose exec data
+  never reaches the coverage report or gate.
+- Docs: new `README.md` (library usage, the §9.1 off-heap-memory note, generator
+  CLI, build/test commands); `.claude/CLAUDE.md` module layout + build commands
+  refreshed for the two new modules. DESIGN §13 unchanged — the manifest-filename
+  and version-vs-checksum-order deviations were already reconciled in §8.3 / §6.1
+  when they landed.
+
+**Tests:** 6 integration cases above + 2 perf cases. Full suite 220 tests;
+`lib` and generator packages stay 100% line / 100% branch (generator line is 99%
+— only `GeneratorCli.main`'s `System.exit`).
 
 ---
 

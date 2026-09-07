@@ -132,21 +132,28 @@ restored. SHA-256 against the FIPS 180-2 `"abc"` and empty vectors.
 JDK-backed, so the tests validate our usage (unsigned value, buffer handling), not
 the algorithm.
 
-### [ ] B3 — PrefixIndex
+### [x] B3 — PrefixIndex
 
 - Build from sorted, deduped `List<byte[]>`: `bucketCount = max(1, ceil(n / K))`,
-  `K = 128` (parameter). Produce the on-disk representation directly:
-  `startIndex[bucketCount+1]` (last `= n`), `separatorOffset[bucketCount+1]`,
+  `K` a parameter (`DEFAULT_BUCKET_SIZE = 128`, the generator's launch default;
+  runtime reads actual `K` from the header). Produce the on-disk representation
+  directly: `startIndex[bucketCount+1]` (last `= n`), `separatorOffset[bucketCount+1]`,
   `separatorData` (packed first-identifier bytes).
 - `selectBucket(byte[] q) -> int` — floor/predecessor search (DESIGN §5.4: greatest
   `i` with `separator[i] ≤ q`, else 0).
-- `n == 0` → `bucketCount = 1`, empty separator array.
-- `rangeFor(q) -> [start, end)` — reads `startIndex` lazily (separate block from
-  separators per §5.2).
+- `n == 0` → one bucket with an empty separator (`startIndex`/`separatorOffset`
+  both `[0, 0]`, `separatorData` empty), so build/serialize/search stay uniform and
+  the §5.4 zero-identifier short-circuit is only an optimization.
+- Entry range for a query is `bucketStart(bucket)` / `bucketEnd(bucket)` (reading
+  the `startIndex` table, a separate block from separators per §5.2) — no composite
+  `rangeFor`. `startIndex()` / `separatorOffset()` / `separatorData()` expose
+  defensive copies of the tables for B5.
 
-**Tests:** §5.4 example `[A,B,C][D,E,F][G,H,I]` — `q` at / between / before / after
-separators; `n` = 0, 1, ≤K, K, K+1; all-identical ids; buckets ≈ K; byte-wise
-comparison with supplementary chars.
+**Tests:** §5.4 example `[A,B,C][D,E,F][G,H,I]` — exact on-disk shape, and `q` at /
+between / before / after separators; `n` = 0, 1, ≤K, K, K+1; single-arg default;
+buckets ≈ K; unsigned byte-wise comparison with supplementary chars; non-positive
+`K` rejected; accessors copy. (All-identical ids is a generator/dedup concern, not
+reachable here post-dedup.)
 
 ### [ ] B4 — Binary format: header + checksum helper
 

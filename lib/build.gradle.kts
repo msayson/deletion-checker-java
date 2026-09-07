@@ -51,6 +51,10 @@ tasks.named<Jar>("jar") {
 
 tasks.named<Test>("test") {
     useJUnitPlatform()
+    // Turn a hung test (e.g. a broken binary search) into a fast failure instead of a stuck CI job.
+    // separate_thread is required: the default mode only checks elapsed time after the method returns.
+    systemProperty("junit.jupiter.execution.timeout.testable.method.default", "10s")
+    systemProperty("junit.jupiter.execution.timeout.thread.mode.default", "separate_thread")
     finalizedBy(tasks.named("jacocoTestReport"))
 }
 

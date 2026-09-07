@@ -232,24 +232,41 @@ byte / truncation (head and tail) → corrupt; bad magic → corrupt; patched
 mismatch → corrupt; missing file → `IOException`. (All-identical ids is a
 generator/dedup concern, not reachable here.)
 
-### [ ] B7 — DatasetManifest
+### [x] B7 — DatasetManifest
 
-- `ManifestJson` — scoped strict recursive-descent reader for the fixed schema
-  (object of string/int fields + one array of flat objects); rejects unexpected
-  structure.
-- `ManifestCanonicalizer` — stable key order, no incidental whitespace.
-- `ManifestWriter` — canonical JSON + `manifestChecksum` (SHA-256 over the
-  canonical form with that field omitted).
-- `DatasetManifest.read(Path)` — parse; verify `manifestChecksum`; check
-  `formatVersion` recognized. Model: three version fields + entries
-  `(entityType, fileName, identifierCount, checksum)`. `entry(String) -> Optional`.
+- `ManifestJson` (package-private) — strict recursive-descent JSON reader →
+  `Map` / `List` / `String` / `Long` tree. Rejects escape sequences, floats,
+  `true` / `false` / `null`, duplicate keys, control chars in strings, leading
+  zeros, and trailing content — every malformed input throws
+  `InvalidManifestException`, never a raw runtime exception.
+- `DatasetManifest` — a `record` (`formatVersion`, `datasetVersion`,
+  `generatorVersion`, `entityTypes`) with `SUPPORTED_FORMAT_VERSION = 1`.
+  `parse` maps the tree strictly: required keys, exact types, **no unknown keys**
+  (top level and per entry), no duplicate `entityType`, `identifierCount >= 0`.
+  Order: parse → **version check first** (unknown → `UnsupportedManifestVersionException`
+  with `found`/`supported`, before the checksum, since a v2 schema would fail
+  canonicalization anyway) → `manifestChecksum` verify → build. `read(Path)`
+  wraps `parse` over `Files.readString` (UTF-8); `IOException` propagates.
+  `entry(String) -> Optional`.
+- `ManifestCanonicalizer.canonicalize(DatasetManifest)` — keys ascending, no
+  whitespace, no `manifestChecksum`. String values must not contain a quote,
+  backslash, or control char (`IllegalArgumentException`) — keeps the canonical
+  form escape-free.
+- `ManifestWriter.write(DatasetManifest)` — canonical form + a trailing
+  `manifestChecksum` (`"sha256:" + hex(SHA-256(canonical))`).
+- `EntityTypeEntry` — public record, validates non-null fields + non-negative
+  count.
 
-**Tests:** parse the §5.1 sample; write → read round-trip; checksum match and
-mismatch; unknown `formatVersion` → version message; missing-type lookup empty;
-malformed JSON; missing required field; canonicalizer determinism.
-**Risk:** parser error branches against the 90% branch gate — structure every
-`throw` to be reachable from a malformed-input test rather than leaning on coverage
-exclusions.
+**Tests:** `ManifestJsonTest` — the §5.1 sample shape, every-kind whitespace, and
+~25 crafted malformed inputs so **every parser `throw` is covered** (100%
+line + branch, no exclusions). `DatasetManifestTest` — write→read round-trip;
+`read` from a file; missing file → `IOException`; whitespace-insensitive
+verification (pretty-printed file still checks out); checksum mismatch;
+unknown `formatVersion` (found/supported); every missing / wrong-typed / unknown
+key (top level and per entry); non-object root; duplicate entityType; negative
+count; empty `entityTypes`. Plus `ManifestCanonicalizerTest` (exact bytes,
+ordering, determinism, escape rejection) and `ManifestWriterTest`
+(checksum-over-canonical, round-trip).
 
 ### [ ] B8 — DeletionChecker.load + isDeleted + accessors
 

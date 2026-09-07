@@ -6,6 +6,11 @@ import java.nio.ByteBuffer;
 /**
  * Binary search for an exact identifier match within a contiguous range of entries, reading the
  * identifiers straight from a buffer with no intermediate allocation.
+ *
+ * <p>The JDK {@code Arrays}/{@code Collections.binarySearch} helpers don't fit: the entries are
+ * variable-length UTF-8 slices addressed via an offset table, not a {@code T[]} or {@code List}.
+ * Adapting them needs a boxed {@code List<Integer>} index view plus a per-probe slice copy, which
+ * regresses on both allocation and speed over this implementation.
  */
 final class BinarySearch {
 

@@ -38,13 +38,13 @@ class PackedFileWriterTest {
                 PackedFileFormat.CHECKSUM_LENGTH);
     }
 
-    /** Parses a packed file the long way — not via the runtime reader, which does not exist yet. */
+    /** Parses a packed file the long way, section by section, as a cross-check on the writer. */
     private static Parsed parse(final byte[] file) {
         final ByteBuffer buffer = ByteBuffer.wrap(file).order(PackedFileFormat.BYTE_ORDER);
         final Header header = Header.readFrom(buffer);
         final int buckets = header.bucketCount();
         final int count = header.identifierCount();
-        int pos = PackedFileFormat.HEADER_SIZE;
+        int pos = header.byteSize();
 
         final int[] startIndex = new int[buckets + 1];
         for (int i = 0; i <= buckets; i++) {
@@ -59,6 +59,8 @@ class PackedFileWriterTest {
         final byte[] separatorData = new byte[separatorOffset[buckets]];
         buffer.get(pos, separatorData);
         pos += separatorData.length;
+
+        pos += header.bloomBlockCount() * PackedFileFormat.BLOOM_BLOCK_BYTES; // Bloom filter section
 
         final int[] identifierOffset = new int[count + 1];
         for (int i = 0; i <= count; i++) {
@@ -89,11 +91,12 @@ class PackedFileWriterTest {
         final byte[] file = PackedFileWriter.write("user", identifiers, 3);
         final Parsed parsed = parse(file);
 
-        assertEquals(1, parsed.header().formatVersion());
+        assertEquals(2, parsed.header().formatVersion());
         assertEquals("user", parsed.header().entityType());
         assertEquals(9, parsed.header().identifierCount());
         assertEquals(3, parsed.header().bucketSize());
         assertEquals(3, parsed.header().bucketCount());
+        assertTrue(parsed.header().bloomBlockCount() >= 1);
 
         final PrefixIndex expected = PrefixIndex.build(identifiers, 3);
         assertArrayEquals(expected.startIndex(), parsed.startIndex());
@@ -197,5 +200,42 @@ class PackedFileWriterTest {
     void rejectsInvalidBucketSize() {
         assertThrows(
                 IllegalArgumentException.class, () -> PackedFileWriter.write("x", ids("a"), 0));
+    }
+
+    @Test
+    void rejectsNonPositiveBloomFpr() {
+        assertThrows(IllegalArgumentException.class,
+                () -> PackedFileWriter.write("x", ids("a"), 128, 0.0));
+        assertThrows(IllegalArgumentException.class,
+                () -> PackedFileWriter.write("x", ids("a"), 128, -0.1));
+    }
+
+    @Test
+    void aBloomFprOfOneWritesNoFilterSection() {
+        final byte[] withFilter = PackedFileWriter.write("x", sequentialIds(500), 128);
+        final byte[] withoutFilter = PackedFileWriter.write("x", sequentialIds(500), 128, 1.0);
+
+        assertEquals(0, parse(withoutFilter).header().bloomBlockCount());
+        assertTrue(parse(withFilter).header().bloomBlockCount() >= 1);
+        assertTrue(withoutFilter.length < withFilter.length);
+        assertEquals(withoutFilter.length, parse(withoutFilter).totalBytes());
+    }
+
+    @Test
+    void theBloomSectionSitsBetweenTheSeparatorDataAndTheOffsetTable() {
+        final byte[] file = PackedFileWriter.write("x", sequentialIds(2000), 128);
+        final Parsed parsed = parse(file);
+        assertEquals(file.length, parsed.totalBytes(), "no trailing bytes");
+        assertEquals(parsed.header().checksum(), storedChecksum(file));
+    }
+
+    @Test
+    void theFalseNegativeGuardRejectsATamperedFilter() {
+        final List<byte[]> identifiers = sequentialIds(500);
+        final int blockCount = BloomFilter.blockCountFor(identifiers.size(), 0.01);
+        final byte[] wiped = new byte[BloomFilter.build(identifiers, blockCount).length];
+
+        assertThrows(IllegalStateException.class,
+                () -> PackedFileWriter.requireNoFalseNegatives(identifiers, wiped, blockCount));
     }
 }

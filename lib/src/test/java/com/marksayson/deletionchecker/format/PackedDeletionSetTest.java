@@ -1,6 +1,8 @@
 package com.marksayson.deletionchecker.format;
 
+import com.marksayson.deletionchecker.checksum.Checksums;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +31,25 @@ class PackedDeletionSetTest {
             throws IOException {
         final Path path = tempDir.resolve(entityType + ".dat");
         Files.write(path, PackedFileWriter.write(entityType, identifiers, bucketSize));
+        return path;
+    }
+
+    /** A v1 file (92-byte header, no Bloom section) rebuilt from a v2 file, for back-compat tests. */
+    private Path writeV1File(final String entityType, final List<byte[]> identifiers)
+            throws IOException {
+        final byte[] v2 = PackedFileWriter.write(entityType, identifiers, 4, 1.0); // no Bloom section
+        final byte[] v1 = new byte[v2.length - 4];
+        System.arraycopy(v2, 0, v1, 0, PackedFileFormat.HEADER_SIZE_V1);            // header up to 92
+        System.arraycopy(v2, PackedFileFormat.HEADER_SIZE, v1, PackedFileFormat.HEADER_SIZE_V1,
+                v2.length - PackedFileFormat.HEADER_SIZE);                          // sections
+        final ByteBuffer buffer = ByteBuffer.wrap(v1).order(PackedFileFormat.BYTE_ORDER);
+        buffer.putInt(PackedFileFormat.FORMAT_VERSION_OFFSET, 1);
+        buffer.putInt(PackedFileFormat.CHECKSUM_OFFSET, 0);
+        final long crc = Checksums.crc32cWithFieldZeroed(
+                buffer, PackedFileFormat.CHECKSUM_OFFSET, PackedFileFormat.CHECKSUM_LENGTH);
+        buffer.putInt(PackedFileFormat.CHECKSUM_OFFSET, (int) crc);
+        final Path path = tempDir.resolve(entityType + "-v1.dat");
+        Files.write(path, v1);
         return path;
     }
 
@@ -192,7 +213,7 @@ class PackedDeletionSetTest {
     void anUnknownFormatVersionIsAVersionMismatchNotCorruption() throws IOException {
         final Path path = writeFile("user", ids("a"), 4);
         final byte[] bytes = Files.readAllBytes(path);
-        bytes[PackedFileFormat.FORMAT_VERSION_OFFSET] = 2; // little-endian low byte
+        bytes[PackedFileFormat.FORMAT_VERSION_OFFSET] = 3; // past what this build reads
 
         Files.write(path, bytes);
 
@@ -212,5 +233,37 @@ class PackedDeletionSetTest {
         assertThrows(
                 IOException.class,
                 () -> PackedDeletionSet.open(tempDir.resolve("absent.dat"), "user"));
+    }
+
+    @Test
+    void theBloomFilterAcceleratesNegativesWithoutBreakingCorrectness() throws IOException {
+        final PackedDeletionSet set =
+                PackedDeletionSet.open(writeFile("user", sequentialIds(3000), 32), "user");
+        for (int i = 0; i < 3000; i += 17) {
+            assertTrue(set.contains(key(i)));
+        }
+        for (int i = 3000; i < 6000; i++) {
+            assertFalse(set.contains(key(i)));
+        }
+    }
+
+    @Test
+    void aFileWrittenWithTheBloomFilterDisabledStillAnswersMembership() throws IOException {
+        final Path path = tempDir.resolve("nobloom.dat");
+        Files.write(path, PackedFileWriter.write("user", sequentialIds(500), 8, 1.0));
+        final PackedDeletionSet set = PackedDeletionSet.open(path, "user");
+        assertTrue(set.contains(key(42)));
+        assertFalse(set.contains(key(500)));
+    }
+
+    @Test
+    void readsALegacyV1File() throws IOException {
+        final PackedDeletionSet set =
+                PackedDeletionSet.open(writeV1File("user", sequentialIds(400)), "user");
+        for (int i = 0; i < 400; i += 13) {
+            assertTrue(set.contains(key(i)));
+        }
+        assertFalse(set.contains(key(400)));
+        assertFalse(set.contains("00000010x".getBytes(StandardCharsets.US_ASCII)));
     }
 }

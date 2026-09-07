@@ -149,7 +149,7 @@ class DeletionCheckerTest {
     @Test
     void loadReportsAVersionMismatchDistinctlyFromCorruption() throws IOException {
         final byte[] bytes = PackedFileWriter.write("user", ids("a")).clone();
-        bytes[4] = 2; // formatVersion field, little-endian low byte (PackedFileFormat offset 4)
+        bytes[4] = 3; // formatVersion field low byte — 3 is past what this build reads (offset 4)
         Files.write(datasetDir.resolve("deleted-ids-user.dat"), bytes);
         writeManifest(new EntityTypeEntry("user", "deleted-ids-user.dat", 1, "crc32c:00000000"));
 

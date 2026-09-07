@@ -87,7 +87,8 @@ public final class DatasetGenerator {
             final String fileName = "deleted-ids-" + entityType + "-" + date + ".dat";
             final Path file = outputDirectory.resolve(fileName);
 
-            sink.write(file, PackedFileWriter.write(entityType, identifiers, config.bucketSize()));
+            sink.write(file, PackedFileWriter.write(
+                    entityType, identifiers, config.bucketSize(), config.bloomFpr()));
 
             final long checksum = PackedDeletionSet.open(file, entityType).checksum();
             entries.add(new EntityTypeEntry(

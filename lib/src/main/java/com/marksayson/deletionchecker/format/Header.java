@@ -6,14 +6,17 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * The fixed-size header of a packed entity-type file.
+ * The fixed-size header of a packed entity-type file. A v1 header ends at
+ * {@link PackedFileFormat#HEADER_SIZE_V1}; a v2 header adds {@code bloomBlockCount}. This build
+ * writes v2 and reads both — a v1 header simply carries {@code bloomBlockCount == 0}.
  *
- * @param formatVersion the binary layout version (see {@link PackedFileFormat#FORMAT_VERSION})
+ * @param formatVersion the binary layout version (1 or 2)
  * @param entityType the entity type this file holds; ASCII, 1 to 64 bytes
  * @param identifierCount the number of unique identifiers in the file
  * @param bucketSize the prefix index bucket target size {@code K}
  * @param bucketCount the number of prefix index buckets
  * @param checksum the CRC32C of the whole file with this field zeroed, as an unsigned 32-bit value
+ * @param bloomBlockCount the number of Bloom-filter blocks, or 0 for no filter (v1, or empty dataset)
  */
 record Header(
         int formatVersion,
@@ -21,7 +24,8 @@ record Header(
         int identifierCount,
         int bucketSize,
         int bucketCount,
-        long checksum) {
+        long checksum,
+        int bloomBlockCount) {
 
     Header {
         Objects.requireNonNull(entityType, "entityType");
@@ -40,12 +44,23 @@ record Header(
                         "entityType must be ASCII; non-ASCII character at index " + i);
             }
         }
+        if (bloomBlockCount < 0) {
+            throw new IllegalArgumentException("bloomBlockCount must not be negative");
+        }
     }
 
     /**
-     * Writes this header, little-endian, into the first {@link PackedFileFormat#HEADER_SIZE} bytes of
-     * {@code target}. Uses absolute indexing; {@code target}'s position, limit, and byte order are
-     * left unchanged.
+     * Returns this header's on-disk size — where the first section begins.
+     *
+     * @return the header size in bytes
+     */
+    int byteSize() {
+        return PackedFileFormat.headerSize(formatVersion);
+    }
+
+    /**
+     * Writes this header, little-endian, into the first {@link #byteSize()} bytes of {@code target}.
+     * Uses absolute indexing; {@code target}'s position, limit, and byte order are left unchanged.
      *
      * @param target a buffer with capacity for at least a full header
      */
@@ -63,17 +78,20 @@ record Header(
         buffer.putInt(PackedFileFormat.BUCKET_SIZE_OFFSET, bucketSize);
         buffer.putInt(PackedFileFormat.BUCKET_COUNT_OFFSET, bucketCount);
         buffer.putInt(PackedFileFormat.CHECKSUM_OFFSET, (int) checksum);
+        if (formatVersion >= 2) {
+            buffer.putInt(PackedFileFormat.BLOOM_BLOCK_COUNT_OFFSET, bloomBlockCount);
+        }
     }
 
     /**
-     * Reads a header from the first {@link PackedFileFormat#HEADER_SIZE} bytes of {@code source}.
-     * Uses absolute indexing; {@code source} is not consumed.
+     * Reads a header from the start of {@code source}. Uses absolute indexing; {@code source} is not
+     * consumed.
      *
      * @param source a buffer whose start is a packed file header
      * @return the parsed header
      * @throws CorruptDatasetException if the magic bytes are wrong or the entity-type field is
      *     malformed
-     * @throws UnsupportedFormatVersionException if the format version is not the one this build reads
+     * @throws UnsupportedFormatVersionException if the format version is one this build cannot read
      */
     static Header readFrom(final ByteBuffer source) {
         final ByteBuffer buffer = source.duplicate().order(PackedFileFormat.BYTE_ORDER);
@@ -85,8 +103,10 @@ record Header(
         }
 
         final int formatVersion = buffer.getInt(PackedFileFormat.FORMAT_VERSION_OFFSET);
-        if (formatVersion != PackedFileFormat.FORMAT_VERSION) {
-            throw new UnsupportedFormatVersionException(formatVersion, PackedFileFormat.FORMAT_VERSION);
+        if (formatVersion < PackedFileFormat.MIN_READ_FORMAT_VERSION
+                || formatVersion > PackedFileFormat.FORMAT_VERSION) {
+            throw new UnsupportedFormatVersionException(
+                    formatVersion, PackedFileFormat.FORMAT_VERSION);
         }
 
         final int entityTypeLength = buffer.getInt(PackedFileFormat.ENTITY_TYPE_LENGTH_OFFSET);
@@ -101,12 +121,19 @@ record Header(
             }
         }
 
+        final int bloomBlockCount = formatVersion >= 2
+                ? buffer.getInt(PackedFileFormat.BLOOM_BLOCK_COUNT_OFFSET) : 0;
+        if (bloomBlockCount < 0) {
+            throw new CorruptDatasetException("bloomBlockCount is negative: " + bloomBlockCount);
+        }
+
         return new Header(
                 formatVersion,
                 new String(entityTypeBytes, StandardCharsets.US_ASCII),
                 buffer.getInt(PackedFileFormat.IDENTIFIER_COUNT_OFFSET),
                 buffer.getInt(PackedFileFormat.BUCKET_SIZE_OFFSET),
                 buffer.getInt(PackedFileFormat.BUCKET_COUNT_OFFSET),
-                Integer.toUnsignedLong(buffer.getInt(PackedFileFormat.CHECKSUM_OFFSET)));
+                Integer.toUnsignedLong(buffer.getInt(PackedFileFormat.CHECKSUM_OFFSET)),
+                bloomBlockCount);
     }
 }

@@ -12,6 +12,23 @@ class GeneratorConfigTest {
         final GeneratorConfig config = new GeneratorConfig("3.2.1", "2026-09-06T17:00:00Z", 64);
         assertEquals("3.2.1", config.generatorVersion());
         assertEquals(64, config.bucketSize());
+        assertEquals(0.01, config.bloomFpr());
+    }
+
+    @Test
+    void acceptsAnExplicitBloomFprIncludingOneToDisableTheFilter() {
+        assertEquals(0.005, new GeneratorConfig("1.0.0", "2026-09-06T17:00:00Z", 64, 0.005).bloomFpr());
+        assertEquals(1.0, new GeneratorConfig("1.0.0", "2026-09-06T17:00:00Z", 64, 1.0).bloomFpr());
+    }
+
+    @Test
+    void rejectsABloomFprOutsideZeroToOne() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new GeneratorConfig("1.0.0", "2026-09-06T17:00:00Z", 64, 0.0));
+        assertThrows(IllegalArgumentException.class,
+                () -> new GeneratorConfig("1.0.0", "2026-09-06T17:00:00Z", 64, -0.1));
+        assertThrows(IllegalArgumentException.class,
+                () -> new GeneratorConfig("1.0.0", "2026-09-06T17:00:00Z", 64, 1.5));
     }
 
     @Test

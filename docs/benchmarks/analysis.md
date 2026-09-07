@@ -17,6 +17,10 @@ The prefix-index bucket size `K` was swept over {128 … 4096} (§5): **128 is t
 fastest or tied-fastest everywhere, larger `K` only slower, and the memory it would save is
 negligible.
 
+The v2 **Bloom-filter frontend** (§6) now closes the one gap that bound: negative lookups drop
+~3–5x to level with `HashSet`, for ~1.2 mapped B/id and zero heap. On by default (`--bloom-fpr`,
+`1.0` disables).
+
 **Use a plain `HashSet` when** *all* of:
 
 - one entity type, or you always load every type;
@@ -44,20 +48,21 @@ it's about whether you value the artifact / versioning story.
 
 ### Improvements that would shift this
 
-The library loses *only* on latency, *only* for raw lookups and for negatives doing a full search —
-both addressable, all already in DESIGN §12:
+The library loses *only* on latency, and after v2 *only* for positive raw lookups — the rest is
+addressable, all in DESIGN §12:
 
 | Improvement | Effect |
 |---|---|
-| **Bloom-filter frontend** (planned) | Biggest lever. Most queries are for non-deleted entities; a pre-check answers "definitely not deleted" in ~1 cache-line touch — likely faster than a `String` hash + `equals`. Flips the negative-lookup column and calms the p99.9 tail. |
+| **Bloom-filter frontend** (shipped, v2, §6) | Done. Most queries are for non-deleted entities; the pre-check answers "definitely not deleted" in ~1 cache-line touch. Measured: negative p50 ~3–5x faster, now level with `HashSet`; p99.9 tail collapsed. |
 | **Batch / pre-encoded fast paths** (`filter` bucket-reuse, a `contains(byte[])` overload, an ASCII fast path in `IdentifierCodec`) | The `packed contains()` rows are ~20–30% faster than `isDeleted` — that gap is the per-call UTF-8 encode + validation + `byte[]` alloc, not the search. Amortizing it (batch) or skipping it (byte-holding callers) narrows the positive-lookup gap. |
 | **"Fat" offset table** (inline a short ID prefix beside each offset) | Turns ~2 cache misses per binary-search probe into ~1 at scale. Speculative; real format work. |
 | SIMD compare, `Map`→array | Won't matter — the compare is memory-latency-bound, and 1→10 types shows no degradation. |
 
 None touch heap / GC / startup / selective loading, where the library already wins decisively. With
-a Bloom frontend and batch fast paths, `DeletionChecker` becomes a reasonable default even at a few
-hundred thousand IDs, leaving `HashSet` preferable only for the trivial "one small set already in
-memory" case — where it's also simpler.
+the v2 Bloom frontend shipped, `DeletionChecker` is already a reasonable default even at a few
+hundred thousand IDs; batch fast paths would further narrow the positive-lookup gap, leaving
+`HashSet` preferable only for the trivial "one small set already in memory" case — where it's also
+simpler.
 
 ---
 
@@ -192,6 +197,40 @@ tied-fastest in every scenario, and the memory a larger `K` would save is neglig
 anywhere it is at or below 128; `K = 64` was not tested and would roughly double the (already tiny)
 index overhead for at best a marginal latency gain, so there is no reason to chase it. This closes
 the DESIGN §12 "benchmark `K`" item.
+
+---
+
+## 6. Bloom filter (v2) — negative lookups now match `HashSet`
+
+Blocked ("split-block") Bloom filter, one 256-bit block probed per lookup, checked before the
+two-level search (DESIGN §5.7, D14). Toggle in the harness with `-Dbench.bloomFpr` (`0.01` = on,
+`1.0` = disabled). Scoped run: `{uuid, customer}` × `{10K, 1M}` ids, 1 entity type, `bloomFpr=0.01`
+vs `1.0`.
+
+**Negative `isDeleted` — the target case (most queries are for non-deleted entities, §2).**
+
+| shape | ids | neg p50 off → on | neg p99.9 off → on |
+| --- | ---: | --- | --- |
+| customer | 10,000 | 0.18 → 0.06 µs | 0.50 → 0.39 µs |
+| customer | 1,000,000 | 0.38 → 0.08 µs | 4.27 → 0.97 µs |
+| uuid | 10,000 | 0.18 → 0.09 µs | 4.73 → 1.77 µs |
+| uuid | 1,000,000 | 0.45 → 0.10 µs | 5.20 → 1.03 µs |
+
+A "definitely not present" answer is one hash + one cache-line read and never touches the prefix
+index or offset table, so the negative path drops ~3–5x at p50 and collapses the tail. At 1M ids the
+packed set's negative p50 (0.08–0.10 µs) is now level with `HashSet` (0.13–0.14 µs) — §4's "HashSet
+wins raw negative latency" no longer holds for the common case.
+
+**Positive `isDeleted`** pays the probe and still does the full search — within run-to-run noise
+here (e.g. uuid 1M pos p50 0.54 → 0.68 µs), single-digit-ns in principle.
+
+**Footprint.** Mapped bytes/id rises ~1.2 B/id (customer 19.2 → 20.4, uuid 40.3 → 41.6); heap
+unchanged (~0.2–0.3 B/id — the filter is mmap'd, not on-heap). At the default 1% FPR the filter is
+~9.6 bits/id.
+
+**Conclusion.** Keep the Bloom filter on by default (`DEFAULT_BLOOM_FPR = 0.01`). It removes the
+main remaining latency gap vs `HashSet` for negative lookups at a ~6% mapped-bytes cost and zero heap
+cost. `--bloom-fpr 1.0` disables it for the rare set that is almost all positive lookups.
 
 ---
 

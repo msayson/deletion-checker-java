@@ -29,6 +29,13 @@ class GeneratorCliTest {
         return cli.execute(args);
     }
 
+    private static long datBytes(final Path dir) throws IOException {
+        try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+            return files.filter(p -> p.toString().endsWith(".dat"))
+                    .mapToLong(p -> p.toFile().length()).sum();
+        }
+    }
+
     private Path feed(final String content) throws IOException {
         final Path path = tempDir.resolve("feed.jsonl");
         Files.writeString(path, content);
@@ -103,6 +110,39 @@ class GeneratorCliTest {
                 "--generator-version", "1.0.0");
 
         assertEquals(CommandLine.ExitCode.SOFTWARE, code);
+    }
+
+    @Test
+    void aBloomFprOfOneWritesASmallerDatasetThatStillLooksUpCorrectly() throws IOException {
+        final Path input = feed("""
+                {"entityType": "user", "id": "u1"}
+                {"entityType": "user", "id": "u2"}
+                """);
+        final Path withFilter = tempDir.resolve("with");
+        final Path withoutFilter = tempDir.resolve("without");
+
+        assertEquals(0, run("-i", input.toString(), "-o", withFilter.toString(),
+                "--generator-version", "1.0.0", "--dataset-version", "2026-09-06T17:00:00Z"));
+        assertEquals(0, run("-i", input.toString(), "-o", withoutFilter.toString(),
+                "--generator-version", "1.0.0", "--dataset-version", "2026-09-06T17:00:00Z",
+                "--bloom-fpr", "1.0"), err.toString());
+
+        assertTrue(datBytes(withoutFilter) < datBytes(withFilter));
+        final DeletionChecker checker = DeletionChecker.load(withoutFilter, Set.of("user"));
+        assertTrue(checker.isDeleted("user", "u1"));
+        assertTrue(checker.isDeleted("user", "u2"));
+    }
+
+    @Test
+    void aBloomFprOutsideZeroToOneIsAUsageError() throws IOException {
+        final int code = run(
+                "-i", feed("{\"entityType\": \"user\", \"id\": \"u1\"}\n").toString(),
+                "-o", tempDir.resolve("out").toString(),
+                "--generator-version", "1.0.0",
+                "--bloom-fpr", "1.5");
+
+        assertEquals(2, code);
+        assertTrue(err.toString().contains("bloomFpr"));
     }
 
     @Test

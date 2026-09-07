@@ -80,6 +80,7 @@ The generator reads **JSONL** — one flat object per line, UTF-8:
 | `--generator-version` | recorded in the manifest; must begin with a digit (required) |
 | `--dataset-version` | ISO-8601 timestamp; defaults to now |
 | `--bucket-size` | prefix-index bucket target `K`; defaults to 128 |
+| `--bloom-fpr` | Bloom-filter target false-positive rate in `(0, 1]`; defaults to `0.01`. `1.0` writes no filter |
 | `--help`, `--version` | |
 
 The pipeline groups by entity type, validates and UTF-8-encodes each identifier, sorts by encoded

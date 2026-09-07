@@ -29,6 +29,7 @@ Both interpreted in [`analysis.md`](analysis.md).
 | `-Dbench.typeCounts` | `1,5,10` | entity-type counts, sweep B |
 | `-Dbench.typeSweepSize` | `1000000` | identifiers per type, comparative sweep B |
 | `-Dbench.measured` | `500000` | timed calls per direction, comparative sweep |
+| `-Dbench.bloomFpr` | `0.01` | Bloom-filter target FPR for generated datasets; `1.0` disables the filter (see [`analysis.md`](analysis.md) §6) |
 | `-Dbench.xmx` | `7g` | benchmark JVM heap — raise to `8g`+ if the 10M cells OOM |
 | `-Dbench.publish` | `false` | also overwrite the committed `docs/benchmarks/*.md` |
 | `-Dbench.k.values` | `128,256,512,1024,2048,4096` | bucket sizes to compare |
@@ -68,7 +69,7 @@ type count, and includes a **selective-load** row (`packed (1 of N)`) — loadin
 every `K` is measured against it. Packed-only — cells are compared against each other, and against
 the current default (`PrefixIndex.DEFAULT_BUCKET_SIZE = 128`). Larger `K` ⇒ fewer buckets ⇒ a
 smaller, more cache-resident separator array (stage 1) but a wider in-bucket binary search (stage 2);
-this looks for the knee (DESIGN §5.4, §12).
+this looks for the knee.
 
 ## Method & caveats
 
@@ -83,7 +84,7 @@ this looks for the knee (DESIGN §5.4, §12).
   ±10%. `HashSet heap B/id` includes the `String` objects; `packed heap B/id` is only the loaded
   checker (prefix-index arrays + objects), and `packed mapped B/id` is the `.dat` file size — an
   upper bound on resident memory, since untouched pages are never faulted in and clean file-backed
-  pages are reclaimable under pressure (DESIGN §9.1).
+  pages are reclaimable under pressure.
 - **Build cost** — `packed generate` is the whole `DatasetGenerator.generate` call, which itself
   self-validates by loading the result once; `packed load` is a *second*, separate
   `DeletionChecker.load`.

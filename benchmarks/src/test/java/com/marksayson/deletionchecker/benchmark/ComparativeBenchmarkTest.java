@@ -31,8 +31,9 @@ import org.junit.jupiter.api.Test;
 class ComparativeBenchmarkTest {
 
     private static final String TYPE = "bench";
-    private static final GeneratorConfig CONFIG =
-            new GeneratorConfig("1.0.0", "2026-01-01T00:00:00Z", PrefixIndex.DEFAULT_BUCKET_SIZE);
+    private static final GeneratorConfig CONFIG = new GeneratorConfig(
+            "1.0.0", "2026-01-01T00:00:00Z", PrefixIndex.DEFAULT_BUCKET_SIZE,
+            Double.parseDouble(System.getProperty("bench.bloomFpr", "0.01")));
 
     private static final List<IdShape> SHAPES = Benchmarks.shapes("bench.shapes", "uuid,alnum16,customer");
     private static final List<Integer> SIZES =

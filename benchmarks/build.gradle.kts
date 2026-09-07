@@ -32,7 +32,7 @@ tasks.register<Test>("benchmark") {
     maxHeapSize = System.getProperty("bench.xmx") ?: "7g" // the 10M cells hold ~4-5 GB live
     listOf(
         "bench.shapes", "bench.sizes", "bench.typeCounts", "bench.typeSweepSize", "bench.measured",
-        "bench.publish",
+        "bench.publish", "bench.bloomFpr",
         "bench.k.values", "bench.k.shapes", "bench.k.typeCounts", "bench.k.size", "bench.k.measured",
     ).forEach { key -> System.getProperty(key)?.let { systemProperty(key, it) } }
     // Deterministic explicit-GC behaviour for the heap-footprint measurement.

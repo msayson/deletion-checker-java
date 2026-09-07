@@ -11,11 +11,11 @@ import java.nio.file.StandardOpenOption;
 /**
  * One entity type's packed file, memory-mapped and queried for exact membership.
  *
- * <p>{@link #open} maps the file, checks the magic bytes and format version, verifies the whole-file
- * CRC32C, confirms the header's entity type, and lifts the small prefix-index tables onto the heap
- * (they are hot and reused by every query); the large identifier offset table and identifier data
- * stay in the mapping. The mapping is held for the life of this object — the dataset is immutable
- * and there is no {@code close}.
+ * <p>{@link #open} maps the file, checks the magic bytes and format version (v1 and v2 both read),
+ * verifies the whole-file CRC32C, confirms the header's entity type, and lifts the small
+ * prefix-index tables onto the heap (they are hot and reused by every query); the identifier offset
+ * table, identifier data, and Bloom filter stay in the mapping. The mapping is held for the life of
+ * this object — the dataset is immutable and there is no {@code close}.
  *
  * <p>{@link #contains} reads the mapping by absolute index only and holds no mutable state, so an
  * instance is safe for concurrent callers.
@@ -24,6 +24,7 @@ public final class PackedDeletionSet {
 
     private final ByteBuffer data;
     private final PrefixIndex prefixIndex;
+    private final BloomFilter bloomFilter;
     private final String entityType;
     private final int identifierCount;
     private final long checksum;
@@ -33,6 +34,7 @@ public final class PackedDeletionSet {
     private PackedDeletionSet(
             final ByteBuffer data,
             final PrefixIndex prefixIndex,
+            final BloomFilter bloomFilter,
             final String entityType,
             final int identifierCount,
             final long checksum,
@@ -40,6 +42,7 @@ public final class PackedDeletionSet {
             final int identifierDataStart) {
         this.data = data;
         this.prefixIndex = prefixIndex;
+        this.bloomFilter = bloomFilter;
         this.entityType = entityType;
         this.identifierCount = identifierCount;
         this.checksum = checksum;
@@ -57,8 +60,8 @@ public final class PackedDeletionSet {
      * @throws IOException if the file cannot be opened or mapped
      * @throws CorruptDatasetException if the file is truncated, its magic bytes are wrong, its
      *     checksum does not match, or its entity type is not {@code expectedEntityType}
-     * @throws UnsupportedFormatVersionException if the file's format version is not the one this
-     *     build reads
+     * @throws UnsupportedFormatVersionException if the file's format version is one this build
+     *     cannot read
      */
     public static PackedDeletionSet open(final Path path, final String expectedEntityType)
             throws IOException {
@@ -92,7 +95,7 @@ public final class PackedDeletionSet {
         final int bucketCount = header.bucketCount();
         final int identifierCount = header.identifierCount();
 
-        final int startIndexStart = PackedFileFormat.HEADER_SIZE;
+        final int startIndexStart = header.byteSize();
         final int[] startIndex = readInts(data, startIndexStart, bucketCount + 1);
 
         final int separatorOffsetStart = startIndexStart + Integer.BYTES * (bucketCount + 1);
@@ -102,7 +105,12 @@ public final class PackedDeletionSet {
         final byte[] separatorData = new byte[separatorOffset[bucketCount]];
         data.get(separatorDataStart, separatorData);
 
-        final int identifierOffsetTableStart = separatorDataStart + separatorData.length;
+        final int bloomStart = separatorDataStart + separatorData.length;
+        final BloomFilter bloomFilter =
+                BloomFilter.view(data, bloomStart, header.bloomBlockCount());
+
+        final int identifierOffsetTableStart =
+                bloomStart + header.bloomBlockCount() * PackedFileFormat.BLOOM_BLOCK_BYTES;
         final int identifierDataStart =
                 identifierOffsetTableStart + Integer.BYTES * (identifierCount + 1);
 
@@ -110,18 +118,26 @@ public final class PackedDeletionSet {
                 identifierCount, bucketCount, startIndex, separatorOffset, separatorData);
 
         return new PackedDeletionSet(
-                data, prefixIndex, header.entityType(), identifierCount, header.checksum(),
-                identifierOffsetTableStart, identifierDataStart);
+                data, prefixIndex, bloomFilter, header.entityType(), identifierCount,
+                header.checksum(), identifierOffsetTableStart, identifierDataStart);
     }
 
     /**
      * Returns whether {@code id} is recorded as deleted for this entity type.
+     *
+     * <p>When the file has a Bloom filter (format v2), it is consulted first: a "definitely not
+     * present" is returned immediately without touching the prefix index or the offset table, which
+     * is the common negative-lookup case; a "maybe" falls through to the exact two-level search, so
+     * the result is always exact.
      *
      * @param id the identifier to check, UTF-8 encoded
      * @return {@code true} if {@code id} is present, {@code false} otherwise
      */
     public boolean contains(final byte[] id) {
         if (identifierCount == 0) {
+            return false;
+        }
+        if (bloomFilter != null && !bloomFilter.mightContain(id)) {
             return false;
         }
         final int bucket = prefixIndex.selectBucket(id);

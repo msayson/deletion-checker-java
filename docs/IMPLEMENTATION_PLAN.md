@@ -41,6 +41,7 @@ reviewable PR that builds green, holds ≥90% line **and** branch coverage
 | D11 | `data/` kept, contents gitignored | Generated `.dat` files reach ~400 MB — release artifacts, not source |
 | D12 | `lib` jar sets `Automatic-Module-Name: com.marksayson.deletionchecker` | Table stakes for a widely-consumed library |
 | D13 | Per-file checksum is JDK `java.util.zip.CRC32C`, not hand-rolled xxHash64 | Zero hand-rolled hash code to own; hardware-accelerated; purpose-built for corruption/truncation detection. 32-bit is enough for a non-adversarial threat model (DESIGN §5.5). Manifest keeps SHA-256. Header `checksum` field is 4 bytes |
+| D14 | Bloom-filter frontend (B13) is a hand-rolled **blocked** filter in `lib` (mmap'd), **not** Guava `BloomFilter` | Deliberately re-evaluated the zero-runtime-dep rule for this feature. Every mature Bloom library (Guava, commons-collections) is **on-heap**: a ~1.5 B/id `long[]` — ~15 MB for a 10M-id type, ~150 MB across ten types — reintroduces the GC-scan and container-memory cost the packed format exists to eliminate (the whole result of B12), and can't be memory-mapped from the dataset file. Guava on the runtime classpath of hundreds of services is the diamond-dependency hazard §3.1 exists to prevent. A blocked Bloom filter is ~150 LOC of textbook algorithm sitting next to `PrefixIndex` / `BinarySearch`, and being cache-blocked (1 cache line/probe) it is *faster* than Guava's non-blocked `mightContain` (k scattered lines) — which is the point of B13. The one thing a library saves (m/k math + a vetted hash) is a day of work and one test file. **Rule holds.** |
 
 ---
 
@@ -53,13 +54,15 @@ lib/                             runtime checker — ZERO runtime deps
     IdentifierCodec.java          String -> UTF-8 bytes, validation
     UnsignedBytes.java            lexicographic byte comparison
     format/
-      PackedFileFormat.java       magic, FORMAT_VERSION, little-endian + field-offset constants
+      PackedFileFormat.java       magic, FORMAT_VERSION (2), little-endian + field-offset constants
       Header.java                 record + readFrom / writeTo
       PrefixIndex.java            on-disk-shape index: build + floor/predecessor search
       OffsetTableBuilder.java     cumulative byte offsets                (generator-only)
-      PackedFileWriter.java       serialize header + index + table + data, patch checksum  (generator-only)
+      PackedFileWriter.java       serialize header + index + bloom + table + data, patch checksum (generator-only)
       BinarySearch.java           lexicographic byte search over offset table + data
-      PackedDeletionSet.java      mmap one entity-type file, verify, contains(byte[])
+      BloomFilter.java            blocked ("split-block") Bloom filter: build + mightContain     (B13)
+      BloomHash.java              FNV-1a + Murmur3 fmix64                                (B13)
+      PackedDeletionSet.java      mmap one entity-type file, verify, bloom + two-level contains(byte[])
     manifest/
       ManifestJson.java           scoped strict JSON reader
       ManifestCanonicalizer.java  stable key order / whitespace
@@ -429,15 +432,54 @@ branch; `lib` stays 100% / 100%.
 
 **Tests:** `HarnessSmokeTest` (3, in `check`); the benchmarks themselves are manual.
 
+### [x] B13 — Bloom-filter negative-lookup frontend
+
+Motivation: B12 shows `HashSet.contains` beats `isDeleted` at every size, mostly on the **negative**
+path (an absent key), the common case for an access-control workload. A Bloom pre-check turns most
+negatives into "definitely not deleted" in one hash + one cache line, without weakening exactness —
+a "maybe" still falls through to the exact two-level search.
+
+- **`format/BloomFilter`** — a blocked ("split-block", as specified for Apache Parquet) Bloom
+  filter: `bloomBlockCount` blocks of 32 bytes (256 bits = eight LE 32-bit words). One 64-bit hash
+  picks the block (Lemire reduction of the high 32 bits), the low 32 bits pick one bit per word via
+  eight fixed salts; a probe ORs one block's eight contiguous words ≈ one cache line. Built in its
+  on-disk shape (serialization is a byte copy). `blockCountFor(n, fpr)` uses the Parquet split-block
+  sizing formula; ~1.2 B/id at fpr 0.01. **No Guava** — D14.
+- **`format/BloomHash`** — FNV-1a over the UTF-8 bytes, then Murmur3 `fmix64`. ~15 LOC.
+- **`PackedDeletionSet.contains`** — probes the filter first (when present); "definitely not" →
+  `false` with no Prefix Index / offset-table access; "maybe" and any v1 file → the existing exact
+  search, unchanged. The `identifierCount == 0` short-circuit is untouched.
+- **Format → v2.** Header gains one `bloomBlockCount` field (`HEADER_SIZE` 92 → 96); new
+  `[Bloom Filter]` section between the Prefix Index and the Identifier Offset Table (absent when
+  `bloomBlockCount == 0` — an empty dataset or `fpr == 1.0`). Whole-file CRC32C covers it unchanged.
+  `Header.readFrom` reads **v1 and v2**; a v1 file carries `bloomBlockCount == 0`. `PackedFileWriter`
+  emits v2 and asserts no false negatives before writing.
+- **Generator** — `GeneratorConfig.bloomFpr` (default `PackedFileWriter.DEFAULT_BLOOM_FPR` = 0.01,
+  range `(0, 1]`, `1.0` disables), `GeneratorCli --bloom-fpr`.
+
+**Measured** (`benchmarks`, `-Dbench.bloomFpr` toggles it; see `docs/benchmarks/analysis.md` §6):
+negative `isDeleted` drops to roughly the encode cost + one probe (competitive with `HashSet` on an
+absent key); positives pay the probe then the full search (a few ns); ~+1.2 B/id mapped, heap
+unchanged.
+
+**Tests:** `BloomHashTest` (determinism, avalanche, golden empty-input value, distribution);
+`BloomFilterTest` (zero false negatives across block counts and three id shapes; measured FPR ≤ 3×
+target; sizing math; empty filter); `HeaderTest` v1↔v2 round-trip + a future version rejected;
+`PackedFileWriterTest` (v2 sections, `fpr == 1.0` writes no section, non-positive fpr rejected,
+tampered-filter guard); `PackedDeletionSetTest` (Bloom-accelerated negatives stay correct, a
+disabled-filter file, a reconstructed **v1** file still loads); `GeneratorConfigTest` fpr range.
+`lib` and generator packages stay 100% line / 100% branch (generator line 99% — only `main`).
+
 ---
 
 ## 5. Review order
 
-**B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7 → B8 → B9 → B10 → B11 → B12** (13 PRs).
+**B0 → … → B12 → B13** (14 PRs).
 
 Dependencies: B1 feeds B3; B2 feeds B4; B3 + B4 feed B5; B5 feeds B6; B2 feeds B7;
 B6 + B7 feed B8; B8 feeds B9; B5 + B7 + B8 feed B10; everything feeds B11;
-B10 + B11 feed B12. B2 and B7 can run in parallel with the B3–B6 line.
+B10 + B11 feed B12; B6 + B12 feed B13. B2 and B7 can run in parallel with the
+B3–B6 line.
 
 ---
 

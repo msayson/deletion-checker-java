@@ -1,5 +1,6 @@
 package com.marksayson.deletionchecker.generator;
 
+import com.marksayson.deletionchecker.format.PackedFileWriter;
 import com.marksayson.deletionchecker.format.PrefixIndex;
 import com.marksayson.deletionchecker.manifest.DatasetManifest;
 import java.io.PrintWriter;
@@ -47,12 +48,18 @@ public final class GeneratorCli implements Callable<Integer> {
             description = "Prefix-index bucket target size (default: ${DEFAULT-VALUE}).")
     private int bucketSize = PrefixIndex.DEFAULT_BUCKET_SIZE;
 
+    @Option(names = "--bloom-fpr", paramLabel = "RATE",
+            description = "Bloom-filter target false-positive rate in (0, 1]; 1.0 writes no filter "
+                    + "(default: ${DEFAULT-VALUE}).")
+    private double bloomFpr = PackedFileWriter.DEFAULT_BLOOM_FPR;
+
     @Override
     public Integer call() throws Exception {
         final GeneratorConfig config = new GeneratorConfig(
                 generatorVersion,
                 datasetVersion != null ? datasetVersion : Instant.now().toString(),
-                bucketSize);
+                bucketSize,
+                bloomFpr);
 
         Files.createDirectories(output);
         final DatasetManifest manifest =

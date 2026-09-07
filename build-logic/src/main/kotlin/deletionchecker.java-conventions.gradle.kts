@@ -1,4 +1,5 @@
 import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
 // Shared Java build conventions for every module: toolchain, Checkstyle, JaCoCo (with the hard
 // 90% line + branch coverage gate), and the JUnit test setup. Module build files add only what is
@@ -63,6 +64,8 @@ tasks.register<Test>("perfTest") {
     classpath = sourceSets["test"].runtimeClasspath
     maxHeapSize = "2g"
     System.getProperty("perf.size")?.let { systemProperty("perf.size", it) }
+    // No JaCoCo agent — instrumentation would inflate the latency it is asserting against.
+    extensions.getByType(JacocoTaskExtension::class.java).isEnabled = false
     testLogging {
         showStandardStreams = true
         showExceptions = true

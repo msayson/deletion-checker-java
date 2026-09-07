@@ -395,7 +395,7 @@ branch; `lib` stays 100% / 100%.
 `lib` and generator packages stay 100% line / 100% branch (generator line is 99%
 — only `GeneratorCli.main`'s `System.exit`).
 
-### [x] B12 — Comparative benchmark suite
+### [x] B12 — Benchmark suite (packed vs HashSet, and bucket size K)
 
 - New `benchmarks/` module (`dependsOn(:lib, :dataset-generator)`), all
   `@Tag("bench")`. Hand-rolled — extends the `LookupPerfTest` percentile approach;
@@ -405,24 +405,29 @@ branch; `lib` stays 100% / 100%.
   keeps the module honest in `check`.
 - `IdShape` — seeded generators for `uuid` (36 B), `alnum16` (16 B), `customer`
   (`"customer-"` + 6 alnum, 15 B; shared-prefix stressor). `HeapFootprint` —
-  GC-delta retained-heap (`benchmark` task forces `-XX:+UseParallelGC`).
-  `Percentiles`, `BenchmarkResult`, `BenchmarkReport` (CSV + markdown).
-- `ComparativeBenchmarkTest` — **Sweep A** (1 type): shape × {1k,10k,100k,1M,10M}
-  × {`hashset`, `packed`}, measuring `isDeleted` pos/neg latency, `contains(byte[])`
-  latency, heap B/id, mapped B/id, build/generate/load ms. **Sweep B**:
-  typeCount ∈ {1,5,10} at 1M/type, shape rotated, plus a `packed (1 of N)`
-  selective-load row. Every packed cell cross-checked against the `HashSet` oracle.
-- `benchmark` task (in `benchmarks/build.gradle.kts`): tag `bench` only,
-  `-XX:+UseParallelGC`, `-Dbench.xmx` (default 7g),
-  `-Dbench.{shapes,sizes,typeCounts,typeSweepSize,measured,publish}` passthrough.
-  **Local only** — not in `check`, not in `ci.yml`.
-- `-Dbench.publish=true` writes `docs/benchmarks/reference.md` (committed) with a
-  JVM/OS/CPU header; `docs/benchmarks/{README,analysis}.md` document the method and
-  interpret the numbers.
-- DESIGN §4.1's HashSet-vs-packed table now points at `docs/benchmarks/reference.md`
-  for measured numbers. `README.md` / `.claude/CLAUDE.md` updated.
+  GC-delta retained-heap. `Percentiles`; `Benchmarks` (shared id/probe/timing
+  helpers); `{Benchmark,BucketSize}{Result,Report}` (CSV + markdown).
+- `ComparativeBenchmarkTest` → `reference.md` — **Sweep A** (1 type): shape ×
+  {1k,10k,100k,1M,10M} × {`hashset`, `packed`}, measuring `isDeleted` pos/neg
+  latency, `contains(byte[])` latency, heap B/id, mapped B/id, build/generate/load
+  ms. **Sweep B**: typeCount ∈ {1,5,10} at 1M/type, shape rotated, plus a
+  `packed (1 of N)` selective-load row.
+- `BucketSizeBenchmarkTest` → `bucket-size.md` — packed only, K ∈ {128,256,512,
+  1024,2048,4096} × {uuid,customer,alnum16} × typeCount ∈ {1,3,5} at 1M/type; id
+  set generated once per (shape,typeCount), every K measured against it.
+  **Finding: keep `K = 128`** — larger K only slower, index-memory saving
+  negligible. Closes the DESIGN §12 K item.
+- `benchmark` task (`benchmarks/build.gradle.kts`): tag `bench` only,
+  `-XX:+UseParallelGC`, **JaCoCo agent disabled** (also disabled on `perfTest`) so
+  instrumentation does not distort timings, `-Dbench.xmx` (default 7g),
+  `-Dbench.{shapes,sizes,typeCounts,typeSweepSize,measured,publish,k.*}`
+  passthrough. **Local only** — not in `check`, not in `ci.yml`. Run one class
+  with `--tests '*BucketSize*'`.
+- `-Dbench.publish=true` overwrites `docs/benchmarks/{reference,bucket-size}.md`
+  (committed, JVM/OS/CPU header). `docs/benchmarks/{README,analysis}.md` document
+  method + interpretation. DESIGN §4.1 / §5.4 / §12 updated to cite the results.
 
-**Tests:** `HarnessSmokeTest` (3, in `check`); the benchmark itself is manual.
+**Tests:** `HarnessSmokeTest` (3, in `check`); the benchmarks themselves are manual.
 
 ---
 

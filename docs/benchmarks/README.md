@@ -1,18 +1,24 @@
 # Benchmarks
 
-Comparative micro-benchmark: `DeletionChecker` (packed set + mmap + two-level search) versus the
-simplest possible baseline, a plain `HashSet<String>` per entity type.
+Two local-only micro-benchmarks in the `benchmarks/` Gradle module
+(`dependsOn(:lib, :dataset-generator)`, all `@Tag("bench")`, never in `check` or CI). Datasets are
+built through the real `DatasetGenerator` → `DeletionChecker.load` path; the `benchmark` task runs
+with no JaCoCo agent so instrumentation does not distort the timings.
 
-Lives in the `benchmarks/` Gradle module (`dependsOn(:lib, :dataset-generator)`), all `@Tag("bench")`.
-**Local only** — never runs in `check` or CI. Datasets are built through the real
-`DatasetGenerator` → `DeletionChecker.load` path.
+1. **`ComparativeBenchmarkTest`** → [`reference.md`](reference.md) — `DeletionChecker` vs a plain
+   `HashSet<String>` baseline, over identifier shape × set size × entity-type count.
+2. **`BucketSizeBenchmarkTest`** → [`bucket-size.md`](bucket-size.md) — packed set only, comparing
+   prefix-index bucket sizes `K` ∈ {128 … 4096} × shape × entity-type count.
+
+Both interpreted in [`analysis.md`](analysis.md).
 
 ## Running
 
 ```
-./gradlew :benchmarks:benchmark                       # full default sweep, ~15-25 min
-./gradlew :benchmarks:benchmark -Dbench.publish=true   # …and overwrite reference.md
-./gradlew :benchmarks:benchmark \                      # a quick subset
+./gradlew :benchmarks:benchmark                        # both suites, full default run
+./gradlew :benchmarks:benchmark -Dbench.publish=true    # …and overwrite the committed .md files
+./gradlew :benchmarks:benchmark --tests '*BucketSize*'  # just the K sweep
+./gradlew :benchmarks:benchmark --tests '*Comparative*' \
   -Dbench.sizes=1000,100000 -Dbench.shapes=uuid -Dbench.typeCounts=1 -Dbench.measured=50000
 ```
 
@@ -21,15 +27,20 @@ Lives in the `benchmarks/` Gradle module (`dependsOn(:lib, :dataset-generator)`)
 | `-Dbench.shapes` | `uuid,alnum16,customer` | identifier shapes (see below) |
 | `-Dbench.sizes` | `1000,10000,100000,1000000,10000000` | deleted-set size per entity type, sweep A |
 | `-Dbench.typeCounts` | `1,5,10` | entity-type counts, sweep B |
-| `-Dbench.typeSweepSize` | `1000000` | identifiers per type, sweep B |
-| `-Dbench.measured` | `500000` | timed calls per direction (positive / negative) |
+| `-Dbench.typeSweepSize` | `1000000` | identifiers per type, comparative sweep B |
+| `-Dbench.measured` | `500000` | timed calls per direction, comparative sweep |
 | `-Dbench.xmx` | `7g` | benchmark JVM heap — raise to `8g`+ if the 10M cells OOM |
-| `-Dbench.publish` | `false` | also write `docs/benchmarks/reference.md` (requires both sweeps) |
+| `-Dbench.publish` | `false` | also overwrite the committed `docs/benchmarks/*.md` |
+| `-Dbench.k.values` | `128,256,512,1024,2048,4096` | bucket sizes to compare |
+| `-Dbench.k.shapes` | `uuid,customer,alnum16` | shapes for the K sweep |
+| `-Dbench.k.typeCounts` | `1,3,5` | entity-type counts for the K sweep |
+| `-Dbench.k.size` | `1000000` | identifiers per type, K sweep |
+| `-Dbench.k.measured` | `500000` | timed calls per direction, K sweep |
 
-Output: `benchmarks/build/reports/benchmarks/{results.csv, reference.md}` always;
-`docs/benchmarks/reference.md` when `-Dbench.publish=true`.
+Output: `benchmarks/build/reports/benchmarks/*` always; the matching `docs/benchmarks/*.md` when
+`-Dbench.publish=true` (the comparative report needs both its sweeps to have run).
 
-[`analysis.md`](analysis.md) interprets the committed `reference.md` — update it when regenerating.
+[`analysis.md`](analysis.md) interprets the committed results — update it when regenerating.
 
 ## Identifier shapes
 
@@ -41,12 +52,23 @@ Output: `benchmarks/build/reports/benchmarks/{results.csv, reference.md}` always
 
 ## Sweeps
 
+### Comparative (`reference.md`)
+
 **A — per-type scaling** (1 entity type): shape × size × {`hashset`, `packed`}. The primary
 latency-and-bytes/id comparison.
 
 **B — entity-type-count scaling**: `typeCount` ∈ {1, 5, 10}, `typeSweepSize` identifiers each, shape
 rotated across types. Measures how `DeletionChecker`'s map lookup, `load` time, and heap scale with
 type count, and includes a **selective-load** row (`packed (1 of N)`) — loading one type out of N.
+
+### Bucket size K (`bucket-size.md`)
+
+`K` ∈ {128, 256, 512, 1024, 2048, 4096} × shape × `typeCount` ∈ {1, 3, 5}, at a fixed
+`bench.k.size` identifiers per type. The identifier set is generated once per (shape, typeCount) and
+every `K` is measured against it. Packed-only — cells are compared against each other, and against
+the current default (`PrefixIndex.DEFAULT_BUCKET_SIZE = 128`). Larger `K` ⇒ fewer buckets ⇒ a
+smaller, more cache-resident separator array (stage 1) but a wider in-bucket binary search (stage 2);
+this looks for the knee (DESIGN §5.4, §12).
 
 ## Method & caveats
 

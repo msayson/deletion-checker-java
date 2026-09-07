@@ -1,9 +1,15 @@
 plugins {
     `java-library`
+    checkstyle
 }
 
 repositories {
     mavenCentral()
+}
+
+checkstyle {
+    toolVersion = libs.versions.checkstyle.get()
+    maxWarnings = 0
 }
 
 dependencies {

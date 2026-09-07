@@ -3,10 +3,15 @@
 Local, exact deletion-state lookup over a packed immutable binary dataset. See `docs/DESIGN.md` for architecture and binary layout.
 
 ## Build & test
-- Build: `./gradlew build`
+- Build: `./gradlew build` (runs Checkstyle + tests via `check`)
 - All tests: `./gradlew test`
 - Single test: `./gradlew test --tests "com.marksayson.DeletionCheckerTest"` (or `--tests "…DeletionCheckerTest.methodName"`)
+- Lint only: `./gradlew checkstyleMain checkstyleTest`
 - Java version: 21 (Gradle toolchain, see `lib/build.gradle.kts`)
+
+## Style
+- Checkstyle (version in `gradle/libs.versions.toml`), config `config/checkstyle/checkstyle.xml`, shared by all modules. Violations fail the build.
+- 4-space indent, 120-col lines, no wildcard imports, documented public API.
 
 ## Module layout
 - `lib/` — the deletion-checker library (Gradle module, package `com.marksayson`). Sources in `lib/src/main/java`, tests in `lib/src/test/java`.

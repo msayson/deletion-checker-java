@@ -1,0 +1,122 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Checkstyle configuration for deletion-checker-java.
+
+  Curated to pass cleanly on the current tree and to enforce the conventions
+  the project already follows (4-space indent, documented public API, no
+  wildcard / JDK-internal imports). Tighten as code lands in later batches.
+
+  Shared by every module (config dir defaults to <rootDir>/config/checkstyle).
+-->
+<module name="Checker">
+  <property name="charset" value="UTF-8"/>
+  <property name="severity" value="error"/>
+  <property name="fileExtensions" value="java"/>
+
+  <module name="SuppressionFilter">
+    <property name="file" value="${config_loc}/suppressions.xml"/>
+    <property name="optional" value="true"/>
+  </module>
+  <module name="SuppressWarningsFilter"/>
+
+  <!-- File-level -->
+  <module name="FileTabCharacter">
+    <property name="eachLine" value="true"/>
+  </module>
+  <module name="NewlineAtEndOfFile"/>
+  <module name="LineLength">
+    <property name="max" value="120"/>
+    <property name="ignorePattern" value="^(package|import) .*"/>
+  </module>
+  <module name="RegexpSingleline">
+    <property name="format" value="\s+$"/>
+    <property name="message" value="Trailing whitespace"/>
+  </module>
+
+  <module name="TreeWalker">
+    <!-- Honour @SuppressWarnings("checkstyle:...") -->
+    <module name="SuppressWarningsHolder"/>
+
+    <!-- Imports -->
+    <module name="AvoidStarImport"/>
+    <module name="RedundantImport"/>
+    <module name="UnusedImports"/>
+    <module name="IllegalImport">
+      <property name="regexp" value="true"/>
+      <property name="illegalPkgs" value="^sun\.,^com\.sun\.,^jdk\.internal\."/>
+    </module>
+
+    <!-- Naming -->
+    <module name="PackageName"/>
+    <module name="TypeName"/>
+    <module name="MethodName"/>
+    <module name="MemberName"/>
+    <module name="ParameterName"/>
+    <module name="LocalVariableName"/>
+    <module name="LocalFinalVariableName"/>
+    <module name="ConstantName"/>
+    <module name="StaticVariableName"/>
+
+    <!-- Javadoc: public API is documented and well-formed -->
+    <module name="InvalidJavadocPosition"/>
+    <module name="JavadocContentLocation"/>
+    <module name="NonEmptyAtclauseDescription"/>
+    <module name="JavadocMethod">
+      <property name="accessModifiers" value="public"/>
+    </module>
+    <module name="MissingJavadocType">
+      <property name="scope" value="public"/>
+    </module>
+
+    <!-- Blocks -->
+    <module name="NeedBraces"/>
+    <module name="LeftCurly"/>
+    <module name="RightCurly"/>
+    <module name="EmptyBlock">
+      <property name="option" value="text"/>
+    </module>
+    <module name="EmptyCatchBlock">
+      <property name="exceptionVariableName" value="expected|ignored"/>
+    </module>
+
+    <!-- Coding -->
+    <module name="EqualsHashCode"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="SimplifyBooleanReturn"/>
+    <module name="StringLiteralEquality"/>
+    <module name="OneStatementPerLine"/>
+    <module name="MultipleVariableDeclarations"/>
+    <module name="FallThrough"/>
+    <module name="MissingSwitchDefault"/>
+    <module name="DefaultComesLast"/>
+    <module name="EmptyStatement"/>
+    <module name="NoFinalizer"/>
+    <module name="UnnecessaryParentheses"/>
+
+    <!-- Design -->
+    <module name="FinalClass"/>
+    <module name="HideUtilityClassConstructor"/>
+    <module name="InterfaceIsType"/>
+    <module name="OneTopLevelClass"/>
+    <module name="MutableException"/>
+
+    <!-- Misc -->
+    <module name="ArrayTypeStyle"/>
+    <module name="UpperEll"/>
+    <module name="ModifierOrder"/>
+    <module name="RedundantModifier"/>
+    <module name="OuterTypeFilename"/>
+    <module name="Indentation">
+      <property name="basicOffset" value="4"/>
+      <property name="braceAdjustment" value="0"/>
+      <property name="caseIndent" value="4"/>
+      <property name="throwsIndent" value="8"/>
+      <property name="lineWrappingIndentation" value="8"/>
+      <property name="arrayInitIndent" value="4"/>
+    </module>
+  </module>
+</module>

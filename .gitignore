@@ -28,3 +28,6 @@ replay_pid*
 
 # Ignore Gradle build output directory
 build
+
+# Ignore local Claude settings
+.claude/settings.local.json

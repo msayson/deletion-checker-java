@@ -8,6 +8,8 @@ class DeletionCheckerTest {
     @Test
     void isDeletedReturnsFalseForUntrackedEntityId() {
         final DeletionChecker deletionChecker = new DeletionChecker();
-        assertFalse(deletionChecker.isDeleted("User", "123"), "isDeleted should return 'false' for untracked entity ID");
+        assertFalse(
+                deletionChecker.isDeleted("User", "123"),
+                "isDeleted should return 'false' for untracked entity ID");
     }
 }

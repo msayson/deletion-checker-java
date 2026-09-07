@@ -49,7 +49,7 @@ it's about whether you value the artifact / versioning story.
 ### Improvements that would shift this
 
 The library loses *only* on latency, and after v2 *only* for positive raw lookups — the rest is
-addressable, all in DESIGN §12:
+addressable: the Bloom frontend is shipped (DESIGN §5.7), the remaining items are DESIGN §12:
 
 | Improvement | Effect |
 |---|---|
@@ -203,8 +203,8 @@ lifting).
 **Conclusion.** Keep `PrefixIndex.DEFAULT_BUCKET_SIZE = 128`. It is the fastest or statistically
 tied-fastest in every scenario, and the memory a larger `K` would save is negligible. If the knee is
 anywhere it is at or below 128; `K = 64` was not tested and would roughly double the (already tiny)
-index overhead for at best a marginal latency gain, so there is no reason to chase it. This closes
-the DESIGN §12 "benchmark `K`" item.
+index overhead for at best a marginal latency gain, so there is no reason to chase it. This settles
+the bucket-size question; DESIGN §5.4 records the outcome.
 
 Given that verdict, the generator exposes no `--bucket-size` flag: `K` is fixed at the format
 default and swept only by `BucketSizeBenchmarkTest` (`-Dbench.k.values`).

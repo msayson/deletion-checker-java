@@ -27,4 +27,6 @@ Dataset generator is not yet implemented; when added it goes in its own module (
 - No new external dependencies without approval.
 
 ## Tests
-New/changed functionality needs tests in the matching `src/test/java`.
+- New/changed functionality needs tests in the matching `src/test/java`.
+- `./gradlew build` enforces ≥90% line + branch coverage per module (JaCoCo, hard-fail); report at `lib/build/reports/jacoco/test/html/index.html`.
+- `check` also runs `checkNoRuntimeDependencies` — `lib` must resolve zero runtime deps.

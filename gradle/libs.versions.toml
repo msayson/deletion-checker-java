@@ -1,5 +1,6 @@
 [versions]
 checkstyle = "14.1.0"
+jacoco = "0.8.15"
 junit-jupiter = "5.11.3"
 
 [libraries]

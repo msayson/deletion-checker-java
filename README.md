@@ -1,5 +1,7 @@
 # deletion-checker-java
 
+[![CI](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml)
+
 **deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime
 network call. A build-time generator converts deleted IDs into an immutable, checksummed
 dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the

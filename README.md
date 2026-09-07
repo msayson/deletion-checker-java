@@ -3,11 +3,12 @@
 [![CI](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml)
 
 **deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime
-network call. A build-time generator converts deleted IDs into an immutable, checksummed
+network call. A build-time generator packs a feed of deleted IDs into an immutable, checksummed
 dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the
 entity types a service asks for.
 
-- **Exact** — no false positives or negatives. The Bloom filter quickly rejects definite misses, but every possible match is verified against the stored UTF-8 bytes.
+- **Exact** — no false positives or negatives. The Bloom filter rejects definite non-members up
+  front; every other lookup is confirmed byte-for-byte against the dataset.
 - **Sub-millisecond** p99.9 lookup; low GC overhead on the hot path.
 - **Selective** — a service pays memory and startup cost only for the entity types it loads.
 - **Zero runtime dependencies** in the library.
@@ -16,16 +17,22 @@ See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout.
 
 ## When to use this?
 
-`HashSet<String>` wins raw positive-lookup latency. `DeletionChecker` is designed to reduce heap usage, GC pressure, and startup time, and loads only the entity types a service needs.
+Lookup latency is close and workload-dependent: a `HashSet<String>` is faster when the IDs you check
+are usually *in* the deleted set; `DeletionChecker` matches or beats it when they are usually *not*,
+since a Bloom filter discards most non-members without reading the identifier data (this suits
+access-control-style checks, where most lookups are for entities that are still live).
+`DeletionChecker`'s decisive wins are elsewhere: far less heap, negligible GC pressure, faster
+startup, and loading only the entity types a service needs.
 
 | Situation | Use |
 | --- | --- |
-| One set, small enough to sit in heap, already loaded from your own store | `HashSet<String>` |
+| A single small set already held in memory | `HashSet<String>` |
+| Lookups are mostly for IDs that *are* deleted, and the set fits in heap | `HashSet<String>` |
 | Millions of IDs | `DeletionChecker` |
-| Several entity types, each service needs a different subset | `DeletionChecker` |
+| Several entity types, each service loading a different subset | `DeletionChecker` |
 | Tight container memory limit or a GC-pause SLA | `DeletionChecker` |
-| Frequent restarts and large deletion sets | `DeletionChecker` |
-| Need a versioned, checksummed, distributable dataset | `DeletionChecker` |
+| Frequent restarts or autoscaling | `DeletionChecker` |
+| A versioned, checksummed, distributable dataset | `DeletionChecker` |
 
 See [`docs/benchmarks/analysis.md`](docs/benchmarks/analysis.md) for measured trade-offs.
 
@@ -70,7 +77,7 @@ The generator reads **JSONL** — one flat object per line, UTF-8:
 {"entityType": "order", "id": "ord_10293"}
 ```
 
-```
+```sh
 ./gradlew :dataset-generator:run --args="\
   --input deletions.jsonl \
   --output /data/deletions \

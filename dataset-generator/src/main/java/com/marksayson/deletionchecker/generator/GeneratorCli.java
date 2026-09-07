@@ -44,10 +44,6 @@ public final class GeneratorCli implements Callable<Integer> {
             description = "ISO-8601 timestamp identifying this run (default: now).")
     private String datasetVersion;
 
-    @Option(names = "--bucket-size", paramLabel = "K",
-            description = "Prefix-index bucket target size (default: ${DEFAULT-VALUE}).")
-    private int bucketSize = PrefixIndex.DEFAULT_BUCKET_SIZE;
-
     @Option(names = "--bloom-fpr", paramLabel = "RATE",
             description = "Bloom-filter target false-positive rate in (0, 1]; 1.0 writes no filter "
                     + "(default: ${DEFAULT-VALUE}).")
@@ -58,7 +54,7 @@ public final class GeneratorCli implements Callable<Integer> {
         final GeneratorConfig config = new GeneratorConfig(
                 generatorVersion,
                 datasetVersion != null ? datasetVersion : Instant.now().toString(),
-                bucketSize,
+                PrefixIndex.DEFAULT_BUCKET_SIZE,
                 bloomFpr);
 
         Files.createDirectories(output);

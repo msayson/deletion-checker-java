@@ -206,6 +206,9 @@ anywhere it is at or below 128; `K = 64` was not tested and would roughly double
 index overhead for at best a marginal latency gain, so there is no reason to chase it. This closes
 the DESIGN §12 "benchmark `K`" item.
 
+Given that verdict, the generator exposes no `--bucket-size` flag: `K` is fixed at the format
+default and swept only by `BucketSizeBenchmarkTest` (`-Dbench.k.values`).
+
 ---
 
 ## 6. Bloom filter (v2) — negative lookups now beat `HashSet` at scale

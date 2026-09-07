@@ -82,8 +82,7 @@ The generator reads **JSONL** — one flat object per line, UTF-8:
   --input deletions.jsonl \
   --output /data/deletions \
   --generator-version 3.2.1 \
-  --dataset-version 2026-09-06T17:00:00Z \
-  --bucket-size 128"
+  --dataset-version 2026-09-06T17:00:00Z"
 ```
 
 | Option | |
@@ -92,7 +91,6 @@ The generator reads **JSONL** — one flat object per line, UTF-8:
 | `--output`, `-o` | dataset directory, created if absent (required) |
 | `--generator-version` | recorded in the manifest; must begin with a digit (required) |
 | `--dataset-version` | ISO-8601 timestamp; defaults to now |
-| `--bucket-size` | prefix-index bucket target `K`; defaults to 128 |
 | `--bloom-fpr` | Bloom-filter target false-positive rate in `(0, 1]`; defaults to `0.01`. `1.0` writes no filter |
 | `--help`, `--version` | |
 

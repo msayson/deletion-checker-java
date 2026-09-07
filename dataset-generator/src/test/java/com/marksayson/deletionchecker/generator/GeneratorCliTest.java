@@ -54,8 +54,7 @@ class GeneratorCliTest {
                 "--input", input.toString(),
                 "--output", output.toString(),
                 "--generator-version", "2.0.0",
-                "--dataset-version", "2026-09-06T17:00:00Z",
-                "--bucket-size", "8");
+                "--dataset-version", "2026-09-06T17:00:00Z");
 
         assertEquals(0, code, err.toString());
         assertTrue(out.toString().contains("Wrote 2 entity type(s)"));
@@ -65,7 +64,7 @@ class GeneratorCliTest {
     }
 
     @Test
-    void defaultsDatasetVersionAndBucketSize() throws IOException {
+    void defaultsDatasetVersion() throws IOException {
         final int code = run(
                 "-i", feed("{\"entityType\": \"user\", \"id\": \"u1\"}\n").toString(),
                 "-o", tempDir.resolve("out").toString(),

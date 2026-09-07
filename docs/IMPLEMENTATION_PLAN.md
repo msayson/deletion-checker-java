@@ -268,30 +268,45 @@ count; empty `entityTypes`. Plus `ManifestCanonicalizerTest` (exact bytes,
 ordering, determinism, escape rejection) and `ManifestWriterTest`
 (checksum-over-canonical, round-trip).
 
-### [ ] B8 — DeletionChecker.load + isDeleted + accessors
+### [x] B8 — DeletionChecker.load + isDeleted + accessors
 
-- `load(Path datasetDir, Set<String> entityTypes)`:
-  1. Read + verify the manifest; verify `formatVersion`.
-  2. Requested type absent from the manifest → `IllegalArgumentException` naming it.
-  3. Per present requested type: resolve `fileName` under `datasetDir`, open,
-     verify `formatVersion` + header `entityType` vs manifest + file checksum, mmap.
-  4. Build `Map<String, PackedDeletionSet>`; capture `datasetVersion` and
-     `loadedAt = Instant.now()` on full success.
-  5. Any file failure → fail fast; "corrupted" vs "version mismatch" → distinct
-     messages (§10).
-  6. Unrequested types are never opened.
-- Replace the placeholder no-arg constructor with a private constructor + the
-  `load` factory; migrate `DeletionCheckerTest`.
-- `isDeleted(entityType, id)` — map lookup (miss → IAE, using the requested `Set`
-  to distinguish "not requested" from "unknown") → `IdentifierCodec.encode` (bad
-  id → IAE) → `contains`.
+- `DatasetManifest.FILE_NAME = "manifest.json"` — the manifest's fixed name in a
+  dataset dir (DESIGN §8.3's `manifest-<date>.dat` example is stale; the manifest
+  is JSON per §5.1 and B10's writer will emit this name).
+- `PackedDeletionSet.checksum()` — exposes the header CRC32C that `open` already
+  verified against the file bytes, so `load` can chain it to the manifest.
+- `load(Path datasetDirectory, Set<String> entityTypes)`:
+  1. `DatasetManifest.read(dir/manifest.json)` — version-then-checksum verify
+     (B7); `IOException` propagates for a missing / unreadable manifest.
+  2. Resolve **all** requested types against the manifest before any file I/O;
+     one absent → `IllegalArgumentException` naming it.
+  3. Per resolved type: open `dir/entry.fileName()` (bare name, B7-validated) with
+     `PackedDeletionSet.open` (magic / `formatVersion` / whole-file CRC / header
+     `entityType` vs the manifest spelling), then check the file CRC equals the
+     manifest entry's `crc32c:<hex>`. Mismatch → `CorruptDatasetException`;
+     `open`'s own failures (`CorruptDatasetException` /
+     `UnsupportedFormatVersionException`) propagate with distinct types + messages
+     (§10). Any failure fails the load; partial state is dropped.
+  4. `Map.copyOf` the `entityType -> PackedDeletionSet` map; capture
+     `manifest.datasetVersion()` and `loadedAt = Instant.now()`.
+  5. Unrequested types are never opened (proven by a test with a garbage file for
+     an unrequested type).
+- Class becomes `final` with a private constructor + the `load` factory; the
+  old placeholder public constructor is gone; `DeletionCheckerTest` rebuilt on
+  writer-produced fixtures.
+- `isDeleted(entityType, id)` — `sets.get` (miss → IAE "not requested"; after a
+  fail-fast `load` the map key set **is** the requested set, so no separate Set is
+  kept) → `IdentifierCodec.encode` (bad id → IAE) → `PackedDeletionSet.contains`.
+- `filter` still throws `UnsupportedOperationException` — implemented in B9.
 - `datasetVersion() -> String`, `loadedAt() -> Instant`.
 
-**Tests:** corrupt file for a non-requested type → `load` still succeeds (proves
-selective loading); unknown type at construction → IAE; not-requested type at
-`isDeleted` → IAE; bad id → IAE; corrupted file → fail fast; version mismatch →
-distinct message; `datasetVersion` / `loadedAt` correct; end-to-end membership on
-a writer-built multi-type dataset.
+**Tests:** `DeletionCheckerTest` — multi-type membership hits/misses; unrequested
+type's file unreadable → `load` still succeeds; unknown type → IAE; missing
+manifest → `IOException`; corrupt requested file → `CorruptDatasetException`;
+patched `formatVersion` → `UnsupportedFormatVersionException`; file CRC ≠ manifest
+CRC → `CorruptDatasetException`; not-requested type at `isDeleted` → IAE; null /
+empty / over-long / unpaired-surrogate id → IAE; empty requested set opens
+nothing; `datasetVersion` / `loadedAt` correct; `filter` → UOE. 100% line + branch.
 
 ### [ ] B9 — filter
 

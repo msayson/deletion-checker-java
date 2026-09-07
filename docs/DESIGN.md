@@ -162,7 +162,7 @@ CRC32C and SHA‑256 provide corruption detection, not artifact authenticity.
 ### **6.1 Construction / Selective Loading**
 1. Read the manifest, then, in order: verify its `formatVersion` is the recognized schema version, verify its `manifestChecksum`, and look up each requested entity type by name. The version check precedes the checksum deliberately: a manifest written to a newer schema can't be re‑serialized into the canonical form the checksum is computed over, so a checksum‑first order would report version skew as corruption. This is the same version‑then‑checksum order step 3 applies to each entity‑type file.
 2. If a requested entity type is not listed in the manifest, fail at construction — see §10 for the exact exception.
-3. For each requested entity type only: open its file, verify its `formatVersion` is recognized, verify the header's `entityType` matches the manifest entry, verify the file's checksum, and mmap its Prefix Index / Identifier Offset Table / Identifier Data. Any failure here also fails construction (§10).
+3. For each requested entity type only: open its file, verify its `formatVersion` is recognized, verify the header's `entityType` matches the manifest entry, verify the file's CRC32C against both its own header field and the manifest entry's `checksum` (the manifest is the trust anchor, §5.5), and mmap its Prefix Index / Identifier Offset Table / Identifier Data. Any failure here also fails construction (§10).
 4. Entity types not requested are never opened, read, or mapped.
 
 ### **6.2 isDeleted(entityType, id)**
@@ -217,10 +217,13 @@ List of `(entityType, identifier)` pairs from authoritative deletion source.
 8. Validate by loading with runtime code, requesting all entity types (including manifest and per‑file checksum verification).
 
 ### **8.3 Output**
-One versioned file per entity type, plus a manifest, e.g.:
+One packed file per entity type, plus the manifest. The manifest has the fixed
+name `manifest.json` (it is JSON, §5.1, and `DeletionChecker.load` looks for it by
+that name in the dataset directory); each entity‑type file is named by the
+manifest entry's `fileName`, a bare filename resolved against that same directory:
 
 ```
-manifest-2026-09-06.dat
+manifest.json
 deleted-ids-user-2026-09-06.dat
 deleted-ids-order-2026-09-06.dat
 deleted-ids-device-2026-09-06.dat

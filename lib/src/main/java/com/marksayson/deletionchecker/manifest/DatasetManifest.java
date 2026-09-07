@@ -32,6 +32,9 @@ public record DatasetManifest(
     /** The manifest JSON schema version this build reads and writes. */
     public static final int SUPPORTED_FORMAT_VERSION = 1;
 
+    /** The manifest file's name within a dataset directory. */
+    public static final String FILE_NAME = "manifest.json";
+
     private static final Set<String> MANIFEST_KEYS = Set.of(
             "datasetVersion", "entityTypes", "formatVersion", "generatorVersion", "manifestChecksum");
     private static final Set<String> ENTRY_KEYS =

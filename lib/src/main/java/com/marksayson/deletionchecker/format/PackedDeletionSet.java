@@ -26,6 +26,7 @@ public final class PackedDeletionSet {
     private final PrefixIndex prefixIndex;
     private final String entityType;
     private final int identifierCount;
+    private final long checksum;
     private final int identifierOffsetTableStart;
     private final int identifierDataStart;
 
@@ -34,12 +35,14 @@ public final class PackedDeletionSet {
             final PrefixIndex prefixIndex,
             final String entityType,
             final int identifierCount,
+            final long checksum,
             final int identifierOffsetTableStart,
             final int identifierDataStart) {
         this.data = data;
         this.prefixIndex = prefixIndex;
         this.entityType = entityType;
         this.identifierCount = identifierCount;
+        this.checksum = checksum;
         this.identifierOffsetTableStart = identifierOffsetTableStart;
         this.identifierDataStart = identifierDataStart;
     }
@@ -107,7 +110,7 @@ public final class PackedDeletionSet {
                 identifierCount, bucketCount, startIndex, separatorOffset, separatorData);
 
         return new PackedDeletionSet(
-                data, prefixIndex, header.entityType(), identifierCount,
+                data, prefixIndex, header.entityType(), identifierCount, header.checksum(),
                 identifierOffsetTableStart, identifierDataStart);
     }
 
@@ -143,6 +146,16 @@ public final class PackedDeletionSet {
      */
     public int identifierCount() {
         return identifierCount;
+    }
+
+    /**
+     * Returns this file's CRC32C, as read from its header and already verified against the file's
+     * actual bytes by {@link #open}, as an unsigned 32-bit value in the low bits of the result.
+     *
+     * @return the file checksum
+     */
+    public long checksum() {
+        return checksum;
     }
 
     private static int[] readInts(final ByteBuffer data, final int start, final int count) {

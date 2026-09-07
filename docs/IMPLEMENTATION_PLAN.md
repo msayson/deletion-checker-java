@@ -47,7 +47,7 @@ reviewable PR that builds green, holds ≥90% line **and** branch coverage
 
 ```
 lib/                             runtime checker — ZERO runtime deps
-  src/main/java/com/marksayson/
+  src/main/java/com/marksayson/deletionchecker/
     DeletionChecker.java          public API: load, isDeleted, filter, datasetVersion, loadedAt
     IdentifierCodec.java          String -> UTF-8 bytes, validation
     UnsignedBytes.java            lexicographic byte comparison
@@ -70,7 +70,7 @@ lib/                             runtime checker — ZERO runtime deps
       Checksums.java              hash-with-field-zeroed helper (DESIGN §5.5)
 
 dataset-generator/               build-time tool — dependsOn(lib), may take deps (picocli)
-  src/main/java/com/marksayson/generator/
+  src/main/java/com/marksayson/deletionchecker/generator/
     DeletionSource.java           input abstraction
     JsonlDeletionSource.java      read {entityType, id} per line
     DatasetGenerator.java         pipeline: group -> validate -> sort -> dedup -> write -> self-validate
@@ -87,7 +87,9 @@ Test fixtures are built programmatically via `lib`'s own `PackedFileWriter` /
 
 ## 4. Batches
 
-### B0 — Build scaffolding
+`[x]` = merged and green · `[ ]` = not started.
+
+### [x] B0 — Build scaffolding
 
 - JaCoCo on `lib`; `jacocoTestCoverageVerification` (90% LINE + BRANCH, hard-fail)
   bound into `check`.
@@ -100,7 +102,7 @@ Test fixtures are built programmatically via `lib`'s own `PackedFileWriter` /
 **DoD:** `./gradlew build` green; coverage + zero-dep checks active.
 **Tests:** stubs throw.
 
-### B1 — Identifier primitives
+### [x] B1 — Identifier primitives
 
 - `IdentifierCodec.encode(String) -> byte[]` — UTF-8; reject null, empty, `>36`
   encoded bytes, unpaired surrogates (char scan before encode). Rejections are
@@ -115,7 +117,7 @@ add it only when a caller needs it.
 null; empty; unpaired high / low surrogate. Comparator: UTF-8 vs `String.compareTo`
 divergence on supplementary chars; prefix vs longer; equal; bytes ≥ 0x80.
 
-### B2 — Checksums
+### [ ] B2 — Checksums
 
 - `XxHash64` — hand-rolled: streaming `update(ByteBuffer)` + `digest()` (buffers
   the sub-32-byte stripe tail across calls), plus one-shot.
@@ -127,7 +129,7 @@ known vector.
 **Risk:** top correctness risk — hence its own batch, tested against published
 vectors.
 
-### B3 — PrefixIndex
+### [ ] B3 — PrefixIndex
 
 - Build from sorted, deduped `List<byte[]>`: `bucketCount = max(1, ceil(n / K))`,
   `K = 128` (parameter). Produce the on-disk representation directly:
@@ -143,7 +145,7 @@ vectors.
 separators; `n` = 0, 1, ≤K, K, K+1; all-identical ids; buckets ≈ K; byte-wise
 comparison with supplementary chars.
 
-### B4 — Binary format: header + checksum helper
+### [ ] B4 — Binary format: header + checksum helper
 
 - `PackedFileFormat` — magic, `FORMAT_VERSION = 1`, little-endian + field-offset
   constants.
@@ -156,7 +158,7 @@ comparison with supplementary chars.
 **Tests:** round-trip; byte-exact endianness; `entityType` `>64` bytes rejected;
 bad magic; unrecognized `formatVersion`; zeroed-field hash == manual reference.
 
-### B5 — PackedFileWriter
+### [ ] B5 — PackedFileWriter
 
 - Input: `entityType` + an **already sorted and deduped** `List<byte[]>` + `K`
   (precondition asserted).
@@ -170,7 +172,7 @@ checksum self-verifies; offsets strictly monotonic; `separatorData` contiguous,
 not interleaved with `startIndex`. Structural only — membership is B6's job via
 the real reader.
 
-### B6 — PackedDeletionSet + BinarySearch
+### [ ] B6 — PackedDeletionSet + BinarySearch
 
 - `PackedDeletionSet.open(Path)` — `FileChannel.map` → `MappedByteBuffer`; validate
   magic / recognized `formatVersion` / header `entityType`; verify the file
@@ -189,7 +191,7 @@ flipped byte → checksum failure; truncated file; bad magic; unrecognized
 `formatVersion` → distinct message; header `entityType` ≠ expected; concurrent
 `contains` from multiple threads.
 
-### B7 — DatasetManifest
+### [ ] B7 — DatasetManifest
 
 - `ManifestJson` — scoped strict recursive-descent reader for the fixed schema
   (object of string/int fields + one array of flat objects); rejects unexpected
@@ -208,7 +210,7 @@ malformed JSON; missing required field; canonicalizer determinism.
 `throw` to be reachable from a malformed-input test rather than leaning on coverage
 exclusions.
 
-### B8 — DeletionChecker.load + isDeleted + accessors
+### [ ] B8 — DeletionChecker.load + isDeleted + accessors
 
 - `load(Path datasetDir, Set<String> entityTypes)`:
   1. Read + verify the manifest; verify `formatVersion`.
@@ -233,7 +235,7 @@ selective loading); unknown type at construction → IAE; not-requested type at
 distinct message; `datasetVersion` / `loadedAt` correct; end-to-end membership on
 a writer-built multi-type dataset.
 
-### B9 — filter
+### [ ] B9 — filter
 
 - `<T> List<T> filter(String entityType, List<T> items, Function<T, String> idExtractor)`
   — resolve `entityType` once, then iterate: extract id → `isDeleted` → keep
@@ -243,7 +245,7 @@ a writer-built multi-type dataset.
 **Tests:** all / none / mixed deleted; empty list; input order preserved; null or
 empty extracted id → IAE; not-requested `entityType` → IAE.
 
-### B10 — dataset-generator module
+### [ ] B10 — dataset-generator module
 
 - New Gradle module; `dependsOn(lib)`. Shared JaCoCo + Checkstyle + test config
   via a `build-logic` convention plugin (the Checkstyle config file is already
@@ -264,7 +266,7 @@ empty extracted id → IAE; not-requested `entityType` → IAE.
 chars; each bad-identifier class rejected; self-validation catches a corrupted
 write; generate → `load` → random-membership round-trip.
 
-### B11 — Integration & performance suite + docs
+### [ ] B11 — Integration & performance suite + docs
 
 - Integration tests (DESIGN §11): real multi-entity-type dataset with a partial
   selection; boundary datasets (empty, single identifier, all-identical, many

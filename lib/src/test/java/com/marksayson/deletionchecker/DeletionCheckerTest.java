@@ -1,4 +1,4 @@
-package com.marksayson;
+package com.marksayson.deletionchecker;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;

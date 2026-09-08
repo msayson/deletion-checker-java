@@ -1,6 +1,7 @@
 package com.marksayson.deletionchecker.benchmark;
 
 import com.marksayson.deletionchecker.DeletionChecker;
+import com.marksayson.deletionchecker.IdentifierCodec;
 import com.marksayson.deletionchecker.generator.DatasetGenerator;
 import com.marksayson.deletionchecker.generator.DeletionRecord;
 import com.marksayson.deletionchecker.generator.DeletionSource;
@@ -34,7 +35,8 @@ class HarnessSmokeTest {
             assertEquals(a, b, shape + " must be deterministic");
             assertEquals(500, new HashSet<>(a).size(), shape + " must be distinct");
             for (final String id : a) {
-                assertTrue(id.getBytes(java.nio.charset.StandardCharsets.UTF_8).length <= 36);
+                assertTrue(id.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                        <= IdentifierCodec.MAX_IDENTIFIER_BYTES);
             }
             final Set<String> present = new HashSet<>(a);
             for (final String absent : shape.absent(7L, 500, present)) {

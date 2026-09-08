@@ -187,9 +187,20 @@ class DeletionCheckerTest {
         assertThrows(IllegalArgumentException.class, () -> checker.isDeleted("user", null));
         assertThrows(IllegalArgumentException.class, () -> checker.isDeleted("user", ""));
         assertThrows(IllegalArgumentException.class,
-                () -> checker.isDeleted("user", "x".repeat(37)));
+                () -> checker.isDeleted("user", "x".repeat(65)));
         assertThrows(IllegalArgumentException.class,
                 () -> checker.isDeleted("user", "\uD800")); // unpaired high surrogate
+    }
+
+    @Test
+    void isDeletedHandlesMaxLengthIdentifiers() throws IOException {
+        final String present = "p".repeat(IdentifierCodec.MAX_IDENTIFIER_BYTES);
+        final String other = "q".repeat(IdentifierCodec.MAX_IDENTIFIER_BYTES);
+        final String absent = "a".repeat(IdentifierCodec.MAX_IDENTIFIER_BYTES);
+        final DeletionChecker checker = loadSingleType("user", ids(present, other));
+
+        assertTrue(checker.isDeleted("user", present));
+        assertFalse(checker.isDeleted("user", absent));
     }
 
     @Test

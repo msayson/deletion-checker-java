@@ -112,7 +112,7 @@ The three version fields separate previously‑conflated concerns. `formatVersio
 [Prefix Index]
   bucket[0..bucketCount].startIndex        (bucketCount+1 entries; entry index into the Identifier Offset Table; the last entry is a sentinel equal to identifierCount)
   separatorOffset[0..bucketCount]          (bucketCount+1 entries; byte offset into Separator Data — same offset‑table pattern as the Identifier Offset Table, §5.3)
-  separatorData                            (bucket separators' UTF‑8 bytes, ≤36 bytes each, stored back‑to‑back in bucket order — one contiguous block, never interleaved with startIndex)
+  separatorData                            (bucket separators' UTF‑8 bytes, ≤64 bytes each, stored back‑to‑back in bucket order — one contiguous block, never interleaved with startIndex)
 
 [Bloom Filter]  (v2 only; absent when bloomBlockCount == 0)
   block[0..bloomBlockCount)  (bloomBlockCount blocks of 32 bytes = 256 bits = eight little‑endian 32‑bit words, §5.7)
@@ -155,7 +155,7 @@ The manifest's own checksum is **SHA256** instead (§5.1) — it's small and rea
 CRC32C and SHA‑256 provide corruption detection, not artifact authenticity.
 
 ### **5.6 Identifier Constraints & Exact Comparison**
-- Identifiers are restricted to **UTF‑8, max 36 bytes when encoded** (accommodates canonical hyphenated UUID strings while remaining generic). The cap is on encoded byte length, not `String` character count — those diverge for non‑ASCII text, so specifying bytes directly avoids the ambiguity rather than relying on ASCII to make them coincide.
+- Identifiers are restricted to **UTF‑8, max 64 bytes when encoded** (fits a canonical hyphenated UUID — 36 bytes — with headroom for namespaced or composite keys, while remaining generic; matches the entity‑type name cap). The value is policy, not structural — nothing in the binary format or lookup path depends on it (`IdentifierCodec.MAX_IDENTIFIER_BYTES`), so it can be revised without a format‑version bump. The cap is on encoded byte length, not `String` character count — those diverge for non‑ASCII text, so specifying bytes directly avoids the ambiguity rather than relying on ASCII to make them coincide.
 - Identifiers are stored and compared as their **raw bytes** — never hashed. A hash‑based comparison key (fixed‑width, cache‑aligned, generalizes to any input) was evaluated and rejected: any hash width carries a nonzero collision probability, which conflicts with the hard requirement that `isDeleted` never return `true` for a value that was not actually deleted.
 - Identifiers containing unpaired UTF‑16 surrogates are rejected rather than silently accepted — Java's default UTF‑8 encoder substitutes a replacement character for these, which could make two different caller‑intended identifiers collide into the same stored bytes.
 - The library performs **no Unicode normalization**. Comparison is exact‑byte, so an identifier encoded in a different normalization form (e.g. NFC vs. NFD) than how it was originally deleted would not match — a real risk for human‑typed text, negligible for opaque IDs (UUIDs, database keys, tokens). Callers are responsible for supplying identifiers exactly as issued by the authoritative source; consistent with not imposing any ID‑generation scheme, the library does not normalize on their behalf.
@@ -226,7 +226,7 @@ List of `(entityType, identifier)` pairs from authoritative deletion source.
 
 ### **8.2 Steps**
 1. Group input pairs by `entityType`.
-2. Per entity type: reject over‑length (>36 bytes UTF‑8‑encoded) or malformed (unpaired‑surrogate) identifiers.
+2. Per entity type: reject over‑length (>64 bytes UTF‑8‑encoded) or malformed (unpaired‑surrogate) identifiers.
 3. Encode identifiers as UTF‑8 bytes; sort lexicographically by the **encoded bytes** (§5.3) — never by `String.compareTo()`.
 4. Deduplicate: collapse consecutive equal identifiers to one. The packed set is a true set, not a multiset — `identifierCount` (§5.1, §5.2) is the count of unique identifiers remaining after this step, not the count of input records.
 5. Build that entity type's identifier offset table and prefix index (§5.4).
@@ -274,7 +274,7 @@ One mitigating factor, not a reason to under‑budget: unlike heap/anonymous mem
 - Requested entity type not present in the manifest → throw `IllegalArgumentException` at construction, naming the unsupported entity type.
 - A requested entity type's file missing, unreadable, header `entityType` mismatch, unrecognized `formatVersion`, or checksum mismatch → fail fast during construction; dataset is treated as corrupted (distinct from "unsupported entity type" — this is a valid entity type whose data can't be trusted). This build reads `formatVersion` 1 and 2; anything outside that range means the runtime is too old (or, below the minimum, too new) for the artifact — not that it's corrupted — and gets a distinct message even though the fail‑fast behavior is the same.
 - `isDeleted`/`filter` called with an entity type that was not requested at construction → throw `IllegalArgumentException`, even if that entity type exists in the manifest.
-- Over‑length (>36 bytes UTF‑8‑encoded) or malformed (unpaired‑surrogate) identifier → throw `IllegalArgumentException`.
+- Over‑length (>64 bytes UTF‑8‑encoded) or malformed (unpaired‑surrogate) identifier → throw `IllegalArgumentException`.
 - Corrupted prefix index → validation step (including checksum) should prevent this.
 
 ---

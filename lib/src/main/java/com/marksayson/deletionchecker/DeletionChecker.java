@@ -124,7 +124,7 @@ public final class DeletionChecker {
      * @param id the identifier to check
      * @return {@code true} if the identifier is deleted for this entity type, {@code false} otherwise
      * @throws IllegalArgumentException if {@code entityType} was not requested when this instance was
-     *     loaded, or if {@code id} is null, empty, exceeds 36 bytes when UTF-8 encoded, or contains
+     *     loaded, or if {@code id} is null, empty, exceeds 64 bytes when UTF-8 encoded, or contains
      *     an unpaired surrogate
      */
     public boolean isDeleted(final String entityType, final String id) {
@@ -146,7 +146,7 @@ public final class DeletionChecker {
      * @return a new list containing only the items that are not deleted, in input order
      * @throws NullPointerException if {@code items} or {@code idExtractor} is null
      * @throws IllegalArgumentException if {@code entityType} was not requested when this instance was
-     *     loaded, or if an extracted identifier is null, empty, exceeds 36 bytes when UTF-8 encoded,
+     *     loaded, or if an extracted identifier is null, empty, exceeds 64 bytes when UTF-8 encoded,
      *     or contains an unpaired surrogate
      */
     public <T> List<T> filter(

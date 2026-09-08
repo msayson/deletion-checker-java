@@ -8,8 +8,8 @@ import java.util.Set;
 import java.util.SplittableRandom;
 
 /**
- * The identifier shapes the benchmark sweeps over. All are ASCII and within the dataset's 36-byte
- * limit.
+ * The identifier shapes the benchmark sweeps over. All are ASCII and within the dataset's
+ * identifier-length limit.
  */
 enum IdShape {
 

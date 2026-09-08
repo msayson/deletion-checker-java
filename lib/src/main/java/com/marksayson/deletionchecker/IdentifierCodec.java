@@ -18,8 +18,12 @@ import java.nio.charset.StandardCharsets;
  */
 public final class IdentifierCodec {
 
-    /** Maximum length, in UTF-8 encoded bytes, of a valid identifier. */
-    public static final int MAX_IDENTIFIER_BYTES = 36;
+    /**
+     * Maximum length, in UTF-8 encoded bytes, of a valid identifier. Comfortably fits a canonical
+     * hyphenated UUID (36 bytes) with headroom for namespaced or composite keys; matches the
+     * entity-type name cap. Nothing in the binary format or lookup path depends on the value.
+     */
+    public static final int MAX_IDENTIFIER_BYTES = 64;
 
     private IdentifierCodec() {
     }

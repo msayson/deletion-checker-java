@@ -101,7 +101,7 @@ class DatasetGeneratorTest {
     @Test
     void rejectsInvalidIdentifiersNamingTheOffendingLine() {
         assertRejectsRecord(new DeletionRecord("user", "", 3));
-        assertRejectsRecord(new DeletionRecord("user", "x".repeat(37), 8));
+        assertRejectsRecord(new DeletionRecord("user", "x".repeat(65), 8));
         assertRejectsRecord(new DeletionRecord("user", "\uD800", 12));
     }
 

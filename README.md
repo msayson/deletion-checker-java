@@ -56,7 +56,7 @@ The library and the generator enforce these and throw `IllegalArgumentException`
 **Identifiers** — the `id` passed to `isDeleted` / `filter`, and the `id` field in the feed:
 
 - non-null, non-empty, valid Unicode text
-- **at most 36 bytes once UTF-8-encoded**
+- **at most 64 bytes once UTF-8-encoded**
 
 **Entity type names** — the `entityType` passed to `load` / `isDeleted` / `filter`, and the
 `entityType` field in the feed:

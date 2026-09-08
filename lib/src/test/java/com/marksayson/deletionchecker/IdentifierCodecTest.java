@@ -27,26 +27,32 @@ class IdentifierCodecTest {
     }
 
     @Test
-    void acceptsIdentifierOfExactlyMaxBytes() {
+    void acceptsCanonicalUuid() {
         final String uuid = "123e4567-e89b-12d3-a456-426614174000";
-        assertEquals(IdentifierCodec.MAX_IDENTIFIER_BYTES, uuid.length());
         assertArrayEquals(uuid.getBytes(StandardCharsets.UTF_8), IdentifierCodec.encode(uuid));
     }
 
     @Test
+    void acceptsIdentifierOfExactlyMaxBytes() {
+        final String maxLength = "a".repeat(IdentifierCodec.MAX_IDENTIFIER_BYTES);
+        assertArrayEquals(
+                maxLength.getBytes(StandardCharsets.UTF_8), IdentifierCodec.encode(maxLength));
+    }
+
+    @Test
     void rejectsIdentifierOverMaxBytes() {
-        final String tooLong = "123e4567-e89b-12d3-a456-426614174000x";
+        final String tooLong = "a".repeat(65);
         final IllegalArgumentException e =
                 assertThrows(IllegalArgumentException.class, () -> IdentifierCodec.encode(tooLong));
-        assertEquals("identifier is 37 UTF-8 bytes, over the 36-byte maximum", e.getMessage());
+        assertEquals("identifier is 65 UTF-8 bytes, over the 64-byte maximum", e.getMessage());
     }
 
     @Test
     void rejectsIdentifierOverMaxBytesCountingEncodedBytesNotCharacters() {
-        // 10 supplementary characters = 20 chars but 40 UTF-8 bytes.
-        final String twentyChars = "😀".repeat(10);
-        assertEquals(20, twentyChars.length());
-        assertThrows(IllegalArgumentException.class, () -> IdentifierCodec.encode(twentyChars));
+        // 17 supplementary characters = 34 chars but 68 UTF-8 bytes.
+        final String thirtyFourChars = "😀".repeat(17);
+        assertEquals(34, thirtyFourChars.length());
+        assertThrows(IllegalArgumentException.class, () -> IdentifierCodec.encode(thirtyFourChars));
     }
 
     @Test

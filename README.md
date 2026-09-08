@@ -47,34 +47,21 @@ String version = checker.datasetVersion();  // ISO-8601 stamp of the loaded rele
 Instant loaded = checker.loadedAt();        // when this instance became active
 ```
 
-`load` fails fast (during construction, never on the lookup path) if the manifest or a requested
-file is missing, malformed, version-mismatched, or fails its checksum. Calling `isDeleted` / `filter`
-with an entity type that was not requested at load throws `IllegalArgumentException`, as does an
-identifier or entity type that breaks the [input constraints](#input-constraints).
-
-### Memory
-
-Dataset files are memory-mapped: they don't count against the Java heap, but resident pages count
-toward process RSS and container memory limits like any other memory. Size container limits for the
-full working set of the entity types a service loads. See [`docs/DESIGN.md`](docs/DESIGN.md) §9.1 for
-details.
+`load` fails fast if the manifest or a requested file is missing, malformed, version-mismatched, or fails its checksum. Calling `isDeleted` / `filter` with an entity type that was not requested at load throws `IllegalArgumentException`, as does an identifier or entity type that breaks the [input constraints](#input-constraints).
 
 ## Input constraints
 
-The library and the generator enforce these. At runtime a violation throws
-`IllegalArgumentException` for that call (never on the lookup path); in the generator it fails the
-run with a message naming the offending input line.
+The library and the generator enforce these and throw `IllegalArgumentException` for violations, with the generator specifying the invalid line in its error message.
 
 **Identifiers** — the `id` passed to `isDeleted` / `filter`, and the `id` field in the feed:
 
-- non-null, non-empty
-- UTF-8, **at most 36 bytes when encoded** (fits a canonical hyphenated UUID) — the limit is on
-  encoded bytes, not character count
+- non-null, non-empty, valid Unicode text
+- **at most 36 bytes once UTF-8-encoded**
 
 **Entity type names** — the `entityType` passed to `load` / `isDeleted` / `filter`, and the
 `entityType` field in the feed:
 
-- 1 to 64 visible ASCII characters — no spaces, `/` or `\`. E.g. `user`, `payment_method`,
+- 1 to 64 printable ASCII characters — no spaces, `/` or `\`. E.g. `user`, `payment_method`,
   `api-key`. The name is used verbatim in the packed file header, the manifest, and the generated
   file name.
 
@@ -84,6 +71,10 @@ run with a message naming the offending input line.
 - duplicate identifiers within an entity type collapse to one; the dataset is a true set;
 - `--generator-version` must begin with a digit; `--dataset-version`, if provided, must be an
   ISO-8601 timestamp.
+
+### Memory
+
+Dataset files are memory-mapped and do not occupy Java heap; resident mapped pages still count toward process RSS and container memory limits like any other memory. Size container limits for the full working set of the entity types a service loads. See [`docs/DESIGN.md`](docs/DESIGN.md) §9.1 for details.
 
 ## Generating a dataset
 

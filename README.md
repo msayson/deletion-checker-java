@@ -2,10 +2,7 @@
 
 [![CI](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml)
 
-**deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime
-network call. A build-time generator packs a feed of deleted IDs into an immutable, checksummed
-dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the
-entity types a service asks for.
+**deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime network call. A build-time generator packs a feed of deleted IDs into an immutable, checksummed dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the entity types a service asks for.
 
 - **Exact** — no false positives or negatives. The Bloom filter rejects definite non-members up
   front; every other lookup is confirmed byte-for-byte against the dataset.
@@ -17,12 +14,7 @@ See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout.
 
 ## When to use this?
 
-Lookup latency is close and workload-dependent: a `HashSet<String>` is faster when the IDs you check
-are usually *in* the deleted set; `DeletionChecker` matches or beats it when they are usually *not*,
-since a Bloom filter discards most non-members without reading the identifier data (this suits
-access-control-style checks, where most lookups are for entities that are still live).
-`DeletionChecker`'s decisive wins are elsewhere: far less heap, negligible GC pressure, faster
-startup, and loading only the entity types a service needs.
+Lookup latency is close and workload-dependent: a `HashSet<String>` is faster when the IDs you check are usually *in* the deleted set; `DeletionChecker` matches or beats it when they are usually *not*, since a Bloom filter discards most non-members without reading the identifier data (this suits access-control-style checks where most lookups are for entities that are still live). `DeletionChecker` benefits: far less heap, negligible GC pressure, faster startup, and loading only the entity types a service needs.
 
 | Situation | Use |
 | --- | --- |
@@ -57,9 +49,8 @@ Instant loaded = checker.loadedAt();        // when this instance became active
 
 `load` fails fast (during construction, never on the lookup path) if the manifest or a requested
 file is missing, malformed, version-mismatched, or fails its checksum. Calling `isDeleted` / `filter`
-with an entity type that was not requested at load throws `IllegalArgumentException`; an identifier
-that is null, empty, over 36 UTF-8 bytes, or contains an unpaired surrogate also throws
-`IllegalArgumentException`.
+with an entity type that was not requested at load throws `IllegalArgumentException`, as does an
+identifier or entity type that breaks the [input constraints](#input-constraints).
 
 ### Memory
 
@@ -67,6 +58,32 @@ Dataset files are memory-mapped: they don't count against the Java heap, but res
 toward process RSS and container memory limits like any other memory. Size container limits for the
 full working set of the entity types a service loads. See [`docs/DESIGN.md`](docs/DESIGN.md) §9.1 for
 details.
+
+## Input constraints
+
+The library and the generator enforce these. At runtime a violation throws
+`IllegalArgumentException` for that call (never on the lookup path); in the generator it fails the
+run with a message naming the offending input line.
+
+**Identifiers** — the `id` passed to `isDeleted` / `filter`, and the `id` field in the feed:
+
+- non-null, non-empty
+- UTF-8, **at most 36 bytes when encoded** (fits a canonical hyphenated UUID) — the limit is on
+  encoded bytes, not character count
+
+**Entity type names** — the `entityType` passed to `load` / `isDeleted` / `filter`, and the
+`entityType` field in the feed:
+
+- 1 to 64 visible ASCII characters — no spaces, `/` or `\`. E.g. `user`, `payment_method`,
+  `api-key`. The name is used verbatim in the packed file header, the manifest, and the generated
+  file name.
+
+**Generator feed** (JSONL):
+
+- one flat JSON object per line, UTF-8: `{"entityType": "...", "id": "..."}` — no nesting;
+- duplicate identifiers within an entity type collapse to one; the dataset is a true set;
+- `--generator-version` must begin with a digit; `--dataset-version`, if provided, must be an
+  ISO-8601 timestamp.
 
 ## Generating a dataset
 

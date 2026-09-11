@@ -11,10 +11,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class ChecksumsTest {
 
     private static final int FIELD_LENGTH = 4;
+    private static final Random RANDOM = new Random(20260906L);
 
     private static byte[] randomBytes(final int length) {
         final byte[] bytes = new byte[length];
-        new Random(20260906L).nextBytes(bytes);
+        RANDOM.nextBytes(bytes);
         return bytes;
     }
 

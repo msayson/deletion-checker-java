@@ -156,11 +156,16 @@ final class Benchmarks {
 
     private static long datBytesMatching(final Path dir, final java.util.function.Predicate<String> match) {
         try (Stream<Path> files = Files.list(dir)) {
-            return files.filter(p -> match.test(p.getFileName().toString()))
+            return files.filter(p -> match.test(fileName(p)))
                     .mapToLong(Benchmarks::sizeOf).sum();
         } catch (final IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private static String fileName(final Path path) {
+        final Path name = path.getFileName();
+        return name == null ? "" : name.toString();
     }
 
     private static long sizeOf(final Path file) {
@@ -189,10 +194,15 @@ final class Benchmarks {
         if (tempRoot == null || !Files.exists(tempRoot)) {
             return;
         }
+        // Best effort cleanup; leftover temp files do not fail the benchmark run.
         try (Stream<Path> paths = Files.walk(tempRoot)) {
-            paths.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
-        } catch (final IOException ignored) {
-            // best effort
+            paths.sorted(Comparator.reverseOrder()).forEach(p -> {
+                if (!p.toFile().delete()) {
+                    System.err.println("Warning: failed to delete temp file " + p);
+                }
+            });
+        } catch (final IOException e) {
+            System.err.println("Warning: failed to clean up temp dir " + tempRoot + ": " + e);
         }
     }
 

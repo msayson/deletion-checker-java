@@ -134,7 +134,7 @@ class DatasetGeneratorTest {
     void selfValidationCatchesACorruptedWrite() {
         final DatasetGenerator.FileSink corrupting = (path, bytes) -> {
             final byte[] out = bytes.clone();
-            if (path.getFileName().toString().endsWith(".dat")) {
+            if (path.toString().endsWith(".dat")) {
                 out[out.length - 5] ^= 0x01;
             }
             Files.write(path, out);

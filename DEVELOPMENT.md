@@ -16,7 +16,7 @@ Java 21. The Gradle toolchain (configured by the `deletionchecker.java-conventio
 | `lib/` | The runtime library (`com.marksayson.deletionchecker`). Zero runtime dependencies. |
 | `dataset-generator/` | Build-time CLI that turns a deletion feed into a packed dataset. Depends on `lib`; not shipped to services. |
 | `benchmarks/` | Local-only comparative benchmark vs a `HashSet<String>` baseline ([docs/benchmarks/](docs/benchmarks/)). |
-| `build-logic/` | Shared Gradle conventions (toolchain, Checkstyle, JaCoCo gate). |
+| `build-logic/` | Shared Gradle conventions (toolchain, Checkstyle, SpotBugs, JaCoCo gate). |
 
 All binary/manifest format code — read *and* write — lives in `lib` (`format/`, `manifest/`);
 `dataset-generator` is orchestration only ([`docs/DECISIONS.md`](docs/DECISIONS.md) §1).
@@ -25,12 +25,13 @@ All binary/manifest format code — read *and* write — lives in `lib` (`format
 
 | Command | |
 | --- | --- |
-| `./gradlew build` | compile, Checkstyle, tests, and the ≥90% line + branch coverage gate |
+| `./gradlew build` | compile, Checkstyle, SpotBugs, tests, and the ≥90% line + branch coverage gate |
 | `./gradlew test` | tests only (excludes `@Tag("perf")` and `@Tag("bench")`) |
 | `./gradlew test --tests "…DeletionCheckerTest"` | one class (or `"…DeletionCheckerTest.methodName"`) |
 | `./gradlew perfTest` | p99.9 lookup-latency gate; manual, not part of `build`. `-Dperf.size=N` (default 1,000,000) |
 | `./gradlew :benchmarks:benchmark` | full packed-vs-`HashSet` comparison; local only, ~15-25 min. See [docs/benchmarks/](docs/benchmarks/) |
 | `./gradlew checkstyleMain checkstyleTest` | lint only |
+| `./gradlew spotbugsMain spotbugsTest` | static analysis only; reports at `<module>/build/reports/spotbugs/` |
 
 `./gradlew build` also enforces that `lib` resolves zero runtime dependencies
 (`checkNoRuntimeDependencies`). Test fixtures are built programmatically via `lib`'s own writers; no
@@ -40,3 +41,7 @@ binary files are checked in.
 
 Checkstyle (config `config/checkstyle/checkstyle.xml`, shared by every module) — violations fail the
 build. 4-space indent, 120-column lines, no wildcard imports, documented public API.
+
+SpotBugs (exclude filter `config/spotbugs/exclude.xml`, shared by every module, effort MAX) — any
+finding fails the build. Confirmed false positives get a narrowly-scoped `<Match>` in the exclude
+filter, not a code workaround.

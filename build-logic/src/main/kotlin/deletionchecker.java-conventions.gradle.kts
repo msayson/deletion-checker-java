@@ -1,13 +1,16 @@
+import com.github.spotbugs.snom.Effort
+import com.github.spotbugs.snom.SpotBugsTask
 import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 
-// Shared Java build conventions for every module: toolchain, Checkstyle, JaCoCo (with the hard
-// 90% line + branch coverage gate), and the JUnit test setup. Module build files add only what is
-// specific to them (dependencies, jar manifest, the lib-only zero-runtime-dependency check).
+// Shared Java build conventions for every module: toolchain, Checkstyle, SpotBugs, JaCoCo (with the
+// hard 90% line + branch coverage gate), and the JUnit test setup. Module build files add only what
+// is specific to them (dependencies, jar manifest, the lib-only zero-runtime-dependency check).
 
 plugins {
     java
     checkstyle
+    id("com.github.spotbugs")
     jacoco
 }
 
@@ -34,6 +37,19 @@ java {
 checkstyle {
     toolVersion = libs.findVersion("checkstyle").get().requiredVersion
     maxWarnings = 0
+}
+
+spotbugs {
+    toolVersion = libs.findVersion("spotbugs").get().requiredVersion
+    effort = Effort.MAX
+    excludeFilter = rootProject.layout.projectDirectory.file("config/spotbugs/exclude.xml")
+}
+
+tasks.withType<SpotBugsTask>().configureEach {
+    reports {
+        create("html") { required = true }
+        create("xml") { required = true }
+    }
 }
 
 jacoco {

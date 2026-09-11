@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclude filter for deletion-checker-java, shared by every module.
+
+  Add narrowly-scoped, commented exclusions here as needed — prefer a <Match> scoped to a specific
+  class/method/bug pattern over a blanket exclusion.
+-->
+<FindBugsFilter>
+  <!-- DatasetManifestTest builds a JSON fixture string; the embedded \n is a literal JSON escape,
+       not a platform line separator, so %n would be wrong here. -->
+  <Match>
+    <Class name="com.marksayson.deletionchecker.manifest.DatasetManifestTest"/>
+    <Bug pattern="VA_FORMAT_STRING_USES_NEWLINE"/>
+  </Match>
+
+  <!-- LookupPerfTest.measure calls Random.nextInt from a single call site inside a loop (MEASURED
+       iterations) — SpotBugs counts call sites, not runtime invocations, and flags this as
+       "used once" even though it runs many times. Known false positive for this shape. -->
+  <Match>
+    <Class name="com.marksayson.deletionchecker.perf.LookupPerfTest"/>
+    <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
+  </Match>
+</FindBugsFilter>

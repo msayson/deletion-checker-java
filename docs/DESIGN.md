@@ -198,7 +198,7 @@ Rationale for hand‑rolling the filter rather than adding a dependency (Guava e
 4. Collect non‑deleted items.
 5. Return filtered list.
 
-Batch optimizations may reuse prefix bucket lookups.
+Batch optimizations may reuse prefix bucket lookups. See §9.2 for `filter`'s input‑size and memory characteristics.
 
 ---
 
@@ -264,6 +264,26 @@ This matters for **container memory limits**: RSS from mmap'd, file‑backed pag
 
 One mitigating factor, not a reason to under‑budget: unlike heap/anonymous memory, clean file‑backed pages are typically reclaimable by the kernel under memory pressure without directly triggering an OOM kill. Consuming services should still size container memory limits assuming the full working set of their requested entity types can become resident.
 
+### **9.2 Scale Limits**
+
+**Per entity type (one packed file).** The whole file is memory‑mapped through a single `int`‑indexed buffer, and every internal offset — header fields, the Identifier Offset Table, the Prefix Index — is a 4‑byte value, so a packed file must stay **under 2 GiB** (`Integer.MAX_VALUE` bytes). `identifierCount` is itself a 32‑bit field (≤ ~2.1 billion), but the 2 GiB file cap is always the binding constraint first. Expressed as identifier counts — each identifier costing roughly its encoded length + 4 bytes (offset table) + ~1.5 bytes (Bloom filter at the default 1% rate, plus the prefix index):
+
+| Avg identifier length | ~Max identifiers per file |
+|---|---|
+| 64 B (the §5.6 maximum) | ~30M |
+| 36 B (a hyphenated UUID) | ~50M |
+| ~10 B (short opaque keys) | ~140M |
+
+The design target is **~10M identifiers per entity type** (§2), and the benchmarks (`benchmarks/`) validate to that figure. Between ~10M and the file cap the library still works but is unbenchmarked; beyond the file cap an entity type must be split — the sharding extension (§12), not yet implemented.
+
+Two failure modes at the edge, both currently ungraceful:
+- A packed file at or above 2 GiB fails `DeletionChecker.load` with a raw `IllegalArgumentException` from `FileChannel.map` ("Size exceeds Integer.MAX_VALUE"), not a `CorruptDatasetException`.
+- The generator's offset arithmetic is also `int`‑valued, so a single entity type whose identifier data approaches 2 GiB overflows during generation (a negative allocation size) rather than reporting a clear "too large" error.
+
+**Across entity types.** There is no aggregate size limit in code — each file is independent, mapped lazily, and a consumer only maps the entity types it requests (§6.1). The practical ceiling is **process RSS against the container memory limit** (§9.1) as pages fault in, plus startup latency: `load` verifies each requested file's full CRC32C sequentially, so construction time scales with the total bytes of the requested set. The number of entity types in a manifest is not explicitly bounded — the manifest is read whole and parsed into a list; only the JSON nesting‑depth guard (§10) applies.
+
+**`filter` input list.** `filter` imposes no size cap of its own: `items` is bounded only by `List` itself (`Integer.MAX_VALUE` elements). It builds a result list pre‑sized to the input and appends the non‑deleted items, so when few or no items are deleted the result approaches a full shallow copy — transient heap of roughly the input plus the output reference arrays (the elements themselves are shared, not copied). Each element also costs one short‑lived `byte[]` for the UTF‑8 encode of its identifier — young‑generation garbage proportional to the batch size, nothing retained. The call is sequential and single‑threaded and does not currently reuse prefix‑bucket lookups across the batch (§6.3), so its cost is that of N independent `isDeleted` calls. There is no streaming or iterator form — the caller supplies the whole input and receives the whole output in memory. For request‑scoped batches (up to low millions) this is a non‑issue; for tens of millions, callers should chunk the input or loop `isDeleted` directly to avoid the doubled list footprint.
+
 ---
 
 ## **10. Error Handling**
@@ -275,6 +295,7 @@ One mitigating factor, not a reason to under‑budget: unlike heap/anonymous mem
 - A requested entity type's file missing, unreadable, header `entityType` mismatch, unrecognized `formatVersion`, or checksum mismatch → fail fast during construction; dataset is treated as corrupted (distinct from "unsupported entity type" — this is a valid entity type whose data can't be trusted). This build reads `formatVersion` 1 and 2; anything outside that range means the runtime is too old (or, below the minimum, too new) for the artifact — not that it's corrupted — and gets a distinct message even though the fail‑fast behavior is the same.
 - `isDeleted`/`filter` called with an entity type that was not requested at construction → throw `IllegalArgumentException`, even if that entity type exists in the manifest.
 - Over‑length (>64 bytes UTF‑8‑encoded) or malformed (unpaired‑surrogate) identifier → throw `IllegalArgumentException`.
+- A packed file at or above 2 GiB (§9.2) → construction fails with a raw `IllegalArgumentException` from `FileChannel.map`, not a `CorruptDatasetException`; a known rough edge.
 - Corrupted prefix index → validation step (including checksum) should prevent this.
 
 ---
@@ -301,7 +322,7 @@ One mitigating factor, not a reason to under‑budget: unlike heap/anonymous mem
 
 ### **Integration Tests**
 - Load a real multi‑entity‑type dataset with a partial entity‑type selection
-- Boundary‑case datasets: empty (zero identifiers), single identifier, all identifiers identical, many duplicates
+- Boundary‑case datasets: empty (zero identifiers), single identifier, all identifiers identical, many duplicates, maximum‑length (64‑byte) identifiers
 - Validate random membership per loaded entity type
 - Validate performance constraints
 
@@ -309,7 +330,7 @@ One mitigating factor, not a reason to under‑budget: unlike heap/anonymous mem
 
 ## **12. Future Extensions**
 - Snapshot + delta support
-- Sharding a single entity type across multiple files if it exceeds practical single‑file size
+- Sharding a single entity type across multiple files if it exceeds practical single‑file size — see the preliminary plan in [`plans/1b-identifiers.md`](plans/1b-identifiers.md) (target: 1B identifiers per entity type)
 - SIMD‑accelerated search
 - Loading or unloading an entity type after construction without a full restart
 

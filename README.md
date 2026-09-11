@@ -4,8 +4,7 @@
 
 **deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime network call. A build-time generator packs a feed of deleted IDs into an immutable, checksummed dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the entity types a service asks for.
 
-- **Exact** — no false positives or negatives. The Bloom filter rejects definite non-members up
-  front; every other lookup is confirmed byte-for-byte against the dataset.
+- **Exact** — no false positives or negatives.
 - **Sub-millisecond** p99.9 lookup; low GC overhead on the hot path.
 - **Selective** — a service pays memory and startup cost only for the entity types it loads.
 - **Zero runtime dependencies** in the library.
@@ -74,7 +73,11 @@ The library and the generator enforce these and throw `IllegalArgumentException`
 
 ### Memory
 
-Dataset files are memory-mapped and do not occupy Java heap; resident mapped pages still count toward process RSS and container memory limits like any other memory. Size container limits for the full working set of the entity types a service loads. See [`docs/DESIGN.md`](docs/DESIGN.md) §9.1 for details.
+Dataset files are memory-mapped and do not occupy Java heap; resident mapped pages still count toward process RSS and container memory limits like any other memory. Set container memory limits based on the full working set of the entity types a service loads. See [`docs/DESIGN.md`](docs/DESIGN.md) §9.1 for details.
+
+### Scale
+
+Built for up to **~10 million deleted IDs per entity type** (the benchmarked target). In practice, the current format can hold roughly 30M IDs per type at UUID length, and more for shorter IDs, but those sizes are unbenchmarked. There is no explicit limit on the number of entity types or total dataset size; operational capacity is primarily determined by the memory required for the loaded working set.
 
 ## Generating a dataset
 

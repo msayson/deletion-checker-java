@@ -32,6 +32,7 @@ See [`docs/benchmarks/analysis.md`](docs/benchmarks/analysis.md) for measured tr
 ```java
 import com.marksayson.deletionchecker.DeletionChecker;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 
@@ -71,13 +72,18 @@ The library and the generator enforce these and throw `IllegalArgumentException`
 - `--generator-version` must begin with a digit; `--dataset-version`, if provided, must be an
   ISO-8601 timestamp.
 
-### Memory
+## Memory
 
 Dataset files are memory-mapped and do not occupy Java heap; resident mapped pages still count toward process RSS and container memory limits like any other memory. Set container memory limits based on the full working set of the entity types a service loads. See [`docs/DESIGN.md`](docs/DESIGN.md) §9.1 for details.
 
-### Scale
+## Scale
 
-Built for up to **~10 million deleted IDs per entity type** (the benchmarked target). In practice, the current format can hold roughly 30M IDs per type at UUID length, and more for shorter IDs, but those sizes are unbenchmarked. There is no explicit limit on the number of entity types or total dataset size; operational capacity is primarily determined by the memory required for the loaded working set.
+Comfortable up to **~10 million deleted IDs per entity type** (the benchmarked target). A single
+entity type has a hard ceiling today — roughly 30M–140M IDs depending on average ID length — past which `DeletionChecker.load` (or generation) fails; splitting an entity type across multiple files isn't supported yet. No limit on the number of entity types or total dataset size, which are bounded only by the container memory the loaded working set needs (see [Memory](#memory)).
+
+`filter` builds a result list the size of its input and processes it sequentially — fine for request-scoped batches, but chunk very large ones.
+
+See [`docs/SCALE_LIMITS.md`](docs/SCALE_LIMITS.md) for exact numbers and a `HashSet` memory comparison.
 
 ## Generating a dataset
 

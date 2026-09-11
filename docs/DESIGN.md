@@ -266,6 +266,9 @@ One mitigating factor, not a reason to under‑budget: unlike heap/anonymous mem
 
 ### **9.2 Scale Limits**
 
+For a `HashSet<String>` cost comparison and a per-scale table (heap and off-heap) derived from the
+formulas below, see [`SCALE_LIMITS.md`](SCALE_LIMITS.md).
+
 **Per entity type (one packed file).** The whole file is memory‑mapped through a single `int`‑indexed buffer, and every internal offset — header fields, the Identifier Offset Table, the Prefix Index — is a 4‑byte value, so a packed file must stay **under 2 GiB** (`Integer.MAX_VALUE` bytes). `identifierCount` is itself a 32‑bit field (≤ ~2.1 billion), but the 2 GiB file cap is always the binding constraint first. Expressed as identifier counts — each identifier costing roughly its encoded length + 4 bytes (offset table) + ~1.5 bytes (Bloom filter at the default 1% rate, plus the prefix index):
 
 | Avg identifier length | ~Max identifiers per file |

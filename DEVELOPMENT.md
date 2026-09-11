@@ -37,6 +37,18 @@ All binary/manifest format code — read *and* write — lives in `lib` (`format
 (`checkNoRuntimeDependencies`). Test fixtures are built programmatically via `lib`'s own writers; no
 binary files are checked in.
 
+## CI build matrix
+
+`ci.yml` builds and tests on this JDK × OS matrix (`main` branch):
+
+| | ubuntu | windows | macos |
+|---|---|---|---|
+| **JDK 21** | [![ubuntu-latest / JDK 21](https://img.shields.io/github/check-runs/msayson/deletion-checker-java/main?nameFilter=Build%20%28ubuntu-latest%2C%20jdk21%29&label=)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) | [![windows-latest / JDK 21](https://img.shields.io/github/check-runs/msayson/deletion-checker-java/main?nameFilter=Build%20%28windows-latest%2C%20jdk21%29&label=)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) | [![macos-latest / JDK 21](https://img.shields.io/github/check-runs/msayson/deletion-checker-java/main?nameFilter=Build%20%28macos-latest%2C%20jdk21%29&label=)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) |
+| **JDK 25** | [![ubuntu-latest / JDK 25](https://img.shields.io/github/check-runs/msayson/deletion-checker-java/main?nameFilter=Build%20%28ubuntu-latest%2C%20jdk25%29&label=)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) | [![windows-latest / JDK 25](https://img.shields.io/github/check-runs/msayson/deletion-checker-java/main?nameFilter=Build%20%28windows-latest%2C%20jdk25%29&label=)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) | [![macos-latest / JDK 25](https://img.shields.io/github/check-runs/msayson/deletion-checker-java/main?nameFilter=Build%20%28macos-latest%2C%20jdk25%29&label=)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) |
+
+Per-cell badges read GitHub's check-runs API for `main`'s latest commit; they read as "no check runs"
+on a commit that never triggered CI (`ci.yml` skips markdown-only pushes).
+
 ## Style
 
 Checkstyle (config `config/checkstyle/checkstyle.xml`, shared by every module) — violations fail the

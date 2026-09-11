@@ -13,7 +13,7 @@ See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout.
 
 ## When to use this?
 
-Lookup latency is close and workload-dependent: a `HashSet<String>` is faster when the IDs you check are usually *in* the deleted set; `DeletionChecker` matches or beats it when they are usually *not*, since a Bloom filter discards most non-members without reading the identifier data (this suits access-control-style checks where most lookups are for entities that are still live). `DeletionChecker` benefits: far less heap, negligible GC pressure, faster startup, and loading only the entity types a service needs.
+Lookup latency is close and workload-dependent: a `HashSet<String>` is faster when the IDs you check are usually *in* the deleted set; `DeletionChecker` matches or beats it when they are usually *not*, since a Bloom filter discards most non-members without reading the identifier data (this suits access-control-style checks where most lookups are for entities that are still live). `DeletionChecker` benefits over a HashSet: far less heap, negligible GC pressure, faster startup, and loading only the entity types a service needs.
 
 | Situation | Use |
 | --- | --- |

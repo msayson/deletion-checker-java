@@ -29,6 +29,10 @@ tasks.named<Jar>("jar") {
     }
 }
 
+tasks.named<Javadoc>("javadoc") {
+    title = "DeletionChecker API"
+}
+
 tasks.named("check") {
     dependsOn(checkNoRuntimeDependencies)
 }

@@ -10,7 +10,7 @@
 - **Selective** — a service pays memory and startup cost only for the entity types it loads.
 - **Zero runtime dependencies** in the library.
 
-See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout.
+See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout, or the [JavaDoc](https://msayson.github.io/deletion-checker-java/) for the public API reference.
 
 ## DeletionChecker vs HashSet
 

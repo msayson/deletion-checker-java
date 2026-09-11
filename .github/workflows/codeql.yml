@@ -1,14 +1,16 @@
-name: "CodeQL Code Scan"
+name: "CodeQL"
 
 on:
   push:
     branches: [ "main" ]
     paths-ignore:
       - '**.md'
+      - ci.yml
   pull_request:
     branches: [ "main" ]
     paths-ignore:
       - '**.md'
+      - ci.yml
   schedule:
     - cron: '36 12 * * 1'
 

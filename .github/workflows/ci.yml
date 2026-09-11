@@ -4,9 +4,11 @@ on:
   push:
     paths-ignore:
       - '**.md'
+      - codeql.yml
   pull_request:
     paths-ignore:
       - '**.md'
+      - codeql.yml
 
 permissions:
   contents: read

@@ -1,6 +1,6 @@
 # deletion-checker-java
 
-[![CI](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) [![CodeQL](https://github.com/msayson/deletion-checker-java/actions/workflows/codeql.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/codeql.yml)
+[![CI](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) [![CodeQL](https://github.com/msayson/deletion-checker-java/actions/workflows/codeql.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/codeql.yml) [![codecov](https://codecov.io/github/msayson/deletion-checker-java/graph/badge.svg?token=B244FJNEIX)](https://codecov.io/github/msayson/deletion-checker-java)
 
 **deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime network call. A build-time generator packs a feed of deleted IDs into an immutable, checksummed dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the entity types a service asks for.
 

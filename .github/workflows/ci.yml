@@ -51,6 +51,15 @@ jobs:
           chmod +x gradlew
           ./gradlew build --stacktrace
 
+      - name: Upload coverage to Codecov
+        # One upload per run is enough for the badge; ubuntu/jdk21 is the toolchain-pinned combo.
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' && matrix.java == '21' }}
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: lib/build/reports/jacoco/test/jacocoTestReport.xml,dataset-generator/build/reports/jacoco/test/jacocoTestReport.xml
+          fail_ci_if_error: false
+
       - name: Upload build reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

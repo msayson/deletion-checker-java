@@ -2,13 +2,6 @@
 
 [![CI](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) [![CodeQL Code Scan](https://github.com/msayson/deletion-checker-java/actions/workflows/codeql.yml/badge.svg)](https://github.com/msayson/deletion-checker-java/actions/workflows/codeql.yml)
 
-[![Ubuntu JDK 21](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg?job=CI%20/%20build%20(ubuntu-latest,%2021))](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml)
-
-
-CI JDK 21 Builds: [![Ubuntu](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg?job=Build%20%26%20tests%20(ubuntu-latest,%2021))](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) [![Windows](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg?job=Build%20%26%20tests%20(windows-latest,%2021))](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml) [![MacOS](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg?job=Build%20%26%20tests%20(macos-latest,%2021))](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml)
-
-[![CI JDK 25](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml/badge.svg?job=CI%20/%20java:%2025%20(ubuntu-latest))](https://github.com/msayson/deletion-checker-java/actions/workflows/ci.yml)
-
 **deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime network call. A build-time generator packs a feed of deleted IDs into an immutable, checksummed dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the entity types a service asks for.
 
 - **Exact** — no false positives or negatives.

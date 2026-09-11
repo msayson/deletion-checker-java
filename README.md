@@ -114,9 +114,10 @@ The generator reads **JSONL** — one flat object per line, UTF-8:
 | `--bloom-fpr` | Bloom-filter target false-positive rate in `(0, 1]`; defaults to `0.01`. `1.0` writes no filter |
 | `--help`, `--version` | |
 
-The pipeline groups by entity type, validates and UTF-8-encodes each identifier, sorts by encoded
-bytes, drops duplicates, writes one packed file per type plus `manifest.json`, then **self-validates**
-by loading the result with `DeletionChecker`. A given input always produces byte-identical output.
+The Bloom filter only speeds up lookups for IDs that are *not* deleted — a deleted-ID lookup always falls through to the full search. Lower `--bloom-fpr` if most lookups will be negative (the common case); the default (`0.01`) already fast-paths ~99% of them, so going lower has fast-diminishing returns. Raise it, or `1.0` to disable, if most lookups will be for IDs that *are* deleted.
+
+The pipeline groups by entity type, validates and UTF-8-encodes each identifier, sorts by encoded bytes, drops duplicates, writes one packed file per type plus `manifest.json`, then **self-validates** by loading the result with `DeletionChecker`. A given input always produces byte-identical output.
+
 Malformed input exits `2` with a one-line message naming the offending line.
 
 ## Contributing

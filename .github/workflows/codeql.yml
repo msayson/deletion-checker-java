@@ -3,8 +3,12 @@ name: "CodeQL Code Scan"
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
   schedule:
     - cron: '36 12 * * 1'
 

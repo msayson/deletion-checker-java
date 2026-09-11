@@ -5,15 +5,18 @@
 **deletion-checker-java** lets a service answer "has this ID been deleted?" locally, with no runtime network call. A build-time generator packs a feed of deleted IDs into an immutable, checksummed dataset (one file per entity type, plus a manifest); at runtime the library memory-maps only the entity types a service asks for.
 
 - **Exact** — no false positives or negatives.
-- **Sub-millisecond** p99.9 lookup; low GC overhead on the hot path.
+- **Near-zero heap** — scales to millions of IDs without adding GC pauses or memory pressure to your service.
+- **Loads in tens of milliseconds** — mmap and a checksum check, even at 10M IDs.
 - **Selective** — a service pays memory and startup cost only for the entity types it loads.
 - **Zero runtime dependencies** in the library.
 
 See [`docs/DESIGN.md`](docs/DESIGN.md) for the architecture and binary layout.
 
-## When to use this?
+## DeletionChecker vs HashSet
 
-Lookup latency is close and workload-dependent: a `HashSet<String>` is faster when the IDs you check are usually *in* the deleted set; `DeletionChecker` matches or beats it when they are usually *not*, since a Bloom filter discards most non-members without reading the identifier data (this suits access-control-style checks where most lookups are for entities that are still live). `DeletionChecker` benefits over a HashSet: far less heap, negligible GC pressure, faster startup, and loading only the entity types a service needs.
+Lookup latency is close and workload-dependent. `HashSet<String>` is faster when most lookups are for IDs that *are* deleted; `DeletionChecker` matches or beats it when most are *not* — the common access-control case — thanks to a Bloom-filter front end that skips non-members without touching the identifier data.
+
+`DeletionChecker` consumes hundreds of times less heap than a `HashSet<String>` and loads ~30x faster, benefiting memory-constrained services and fast cold starts.
 
 | Situation | Use |
 | --- | --- |
